@@ -97,13 +97,16 @@ echo 'src-git-full mtk_openwrt_feeds https://github.com/mediatek/mtk-openwrt-fee
 MTK_FEEDS_HNAT="feeds/mtk_openwrt_feeds/autobuild/unified/global/logan_common/25.12/files/target/linux/mediatek"
 if [ -d "$MTK_FEEDS_HNAT" ]; then
     # Driver source files
+    # Driver sources: always overwrite — mtk-openwrt-feeds is authoritative for hnat
     mkdir -p target/linux/mediatek/files-6.12/drivers/net/ethernet/mediatek/mtk_hnat
-    mkdir -p target/linux/mediatek/files-6.12/include/net
-    cp -r "$MTK_FEEDS_HNAT/files-6.12/drivers/net/ethernet/mediatek/mtk_hnat/." \
+    cp -rf "$MTK_FEEDS_HNAT/files-6.12/drivers/net/ethernet/mediatek/mtk_hnat/." \
         target/linux/mediatek/files-6.12/drivers/net/ethernet/mediatek/mtk_hnat/
-    [ -f "$MTK_FEEDS_HNAT/files-6.12/include/net/ra_nat.h" ] && \
-        cp -n "$MTK_FEEDS_HNAT/files-6.12/include/net/ra_nat.h" \
-            target/linux/mediatek/files-6.12/include/net/ || true
+    # ra_nat.h: directory does not exist in immortalwrt 25.12, create and copy
+    if [ -f "$MTK_FEEDS_HNAT/files-6.12/include/net/ra_nat.h" ]; then
+        mkdir -p target/linux/mediatek/files-6.12/include/net
+        cp -f "$MTK_FEEDS_HNAT/files-6.12/include/net/ra_nat.h" \
+            target/linux/mediatek/files-6.12/include/net/
+    fi
     # Kernel patches — skip sfp (already applied via workspace patch set)
     mkdir -p target/linux/mediatek/patches-6.12
     for _patch in "$MTK_FEEDS_HNAT/patches-6.12/"*.patch; do
