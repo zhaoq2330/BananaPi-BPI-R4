@@ -4,6 +4,7 @@
 * Default Gateway: 192.168.2.1
 * Default Password: password
 * Support BRI-R4-NIC-BE14 Model
+* Support MTK-HNAT
 
 ## References
 * https://github.com/coolsnowwolf/lede
