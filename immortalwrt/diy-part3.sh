@@ -68,8 +68,6 @@ install_sfp_warm_reboot_patches() {
     [ -d "$patch_root" ] || return 0
 
     for patch_name in \
-        997-sfp-rtl8672-accept-zero-phys-id-24.10.patch \
-        998-sfp-rtl8672-reduce-false-positive-warning.patch \
         999-2753-net-phy-sfp-support-additional-RollBall-modules.patch \
         999-2754-net-phy-sfp-support-shared-mod-def0-gpio.patch \
         999-2764-net-phy-sfp-add-some-FS-copper-SFP-fixes.patch \
@@ -175,6 +173,28 @@ pushd package/OpenClash
 git clone --depth=1  https://github.com/vernesong/OpenClash
 git config core.sparsecheckout true
 popd
+
+# Fix opkg feed URLs: 24.10-SNAPSHOT feeds are gone, use latest stable 24.10.6
+sed -i 's|24.10-SNAPSHOT|24.10.6|g' include/version.mk
+sed -i 's|24.10-SNAPSHOT|24.10.6|g' package/base-files/image-config.in
+
+# Belt-and-suspenders: uci-defaults script that writes the correct distfeeds.conf
+# on first boot, in case any other post-install script reverts it.
+mkdir -p files/etc/uci-defaults
+cat > files/etc/uci-defaults/99-fix-distfeeds <<'UCIEOF'
+#!/bin/sh
+FEEDCONF="/etc/opkg/distfeeds.conf"
+BASE="https://downloads.immortalwrt.org/releases/24.10.6"
+cat > "$FEEDCONF" <<EOF
+src/gz immortalwrt_core ${BASE}/targets/mediatek/filogic/packages
+src/gz immortalwrt_base ${BASE}/packages/aarch64_cortex-a53/base
+src/gz immortalwrt_luci ${BASE}/packages/aarch64_cortex-a53/luci
+src/gz immortalwrt_packages ${BASE}/packages/aarch64_cortex-a53/packages
+src/gz immortalwrt_routing ${BASE}/packages/aarch64_cortex-a53/routing
+src/gz immortalwrt_telephony ${BASE}/packages/aarch64_cortex-a53/telephony
+EOF
+UCIEOF
+chmod +x files/etc/uci-defaults/99-fix-distfeeds
 
 ./scripts/feeds update -a
 
