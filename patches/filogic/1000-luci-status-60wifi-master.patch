@@ -1,5 +1,4 @@
-diff --git "a/D:\\Code\\Luci-app\\.tmp\\Test\\src\\luci-mod-status\\htdocs\\luci-static\\resources\\view\\status\\include\\60_wifi.js" "b/D:\\Code\\Luci-app\\.tmp\\Test\\patched\\luci-mod-status\\htdocs\\luci-static\\resources\\view\\status\\include\\60_wifi.js"
-index 68a10fc..881d09f 100644
+diff --git a/feeds/luci/modules/luci-mod-status/htdocs/luci-static/resources/view/status/include/60_wifi.js b/feeds/luci/modules/luci-mod-status/htdocs/luci-static/resources/view/status/include/60_wifi.js
 --- a/feeds/luci/modules/luci-mod-status/htdocs/luci-static/resources/view/status/include/60_wifi.js
 +++ b/feeds/luci/modules/luci-mod-status/htdocs/luci-static/resources/view/status/include/60_wifi.js
 @@ -25,33 +25,76 @@ return baseclass.extend({
