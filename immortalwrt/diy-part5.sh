@@ -81,87 +81,6 @@ pushd package/OpenClash
 git clone --depth=1 https://github.com/vernesong/OpenClash
 popd
 
-# Register mtk-openwrt-feeds so kmod-npu and sub-packages are available.
-# immortalwrt openwrt-25.12 does not include this feed in feeds.conf.default.
-# Use src-git (shallow clone) instead of src-git-full to avoid cloning the full
-# multi-branch history (~400 MB) which would time out GitHub Actions.
-echo 'src-git mtk_openwrt_feeds https://github.com/mediatek/mtk-openwrt-feeds.git;main' >> feeds.conf.default
-
-# Re-run feeds update after manual feed modifications
-./scripts/feeds update -a
-
-# Add kmod-mediatek_hnat: immortalwrt openwrt-25.12 does not define this package.
-# mtk_npu/Makefile from mtk-openwrt-feeds depends on it, so we must:
-#   1. copy the 6.12 driver sources into the kernel target tree
-#   2. copy BPI-R4 / mt7988 relevant kernel patches (skip sfp and other SoC DTS patches)
-#   3. append the KernelPackage definition to target/linux/mediatek/modules.mk
-# Source: https://github.com/mediatek/mtk-openwrt-feeds/tree/main/autobuild/unified/global/logan_common/25.12/files/target/linux/mediatek
-MTK_FEEDS_HNAT="feeds/mtk_openwrt_feeds/autobuild/unified/global/logan_common/25.12/files/target/linux/mediatek"
-if [ -d "$MTK_FEEDS_HNAT" ]; then
-    # Driver sources: always overwrite — mtk-openwrt-feeds is authoritative for hnat
-    mkdir -p target/linux/mediatek/files-6.12/drivers/net/ethernet/mediatek/mtk_hnat
-    cp -rf "$MTK_FEEDS_HNAT/files-6.12/drivers/net/ethernet/mediatek/mtk_hnat/." \
-        target/linux/mediatek/files-6.12/drivers/net/ethernet/mediatek/mtk_hnat/
-    # ra_nat.h: directory does not exist in immortalwrt 25.12, create and copy
-    if [ -f "$MTK_FEEDS_HNAT/files-6.12/include/net/ra_nat.h" ]; then
-        mkdir -p target/linux/mediatek/files-6.12/include/net
-        cp -f "$MTK_FEEDS_HNAT/files-6.12/include/net/ra_nat.h" \
-            target/linux/mediatek/files-6.12/include/net/
-    fi
-    # Kernel patches — copy only patches needed for BPI-R4 (mt7988):
-    #   999-eth-*   ethernet/HNAT driver hooks into mtk_eth_soc
-    #   999-hnat-*  netfilter/bridge/pppoe/vxlan offload hooks
-    #   999-net-*   netdevice path-type additions for tunnel offload
-    #   999-tnl-*   tunnel (GRE/VXLAN/PPTP/L2TP) offload support
-    #   999-dts-mt7988a-* BPI-R4 specific DTS additions for HNAT/NPU
-    # Excluded:
-    #   999-sfp-*              handled by workspace patch set
-    #   999-dts-mt798[1679]*   irrelevant SoC DTS patches (mt7981/mt7986/mt7987)
-    mkdir -p target/linux/mediatek/patches-6.12
-    for _patch in "$MTK_FEEDS_HNAT/patches-6.12/"*.patch; do
-        [ -f "$_patch" ] || continue
-        _name="$(basename "$_patch")"
-        case "$_name" in
-            999-sfp-*)                     continue ;;  # workspace handles sfp
-            999-dts-mt7981-*|\
-            999-dts-mt7986*|\
-            999-dts-mt7987*)               continue ;;  # irrelevant SoC
-            999-dts-*)                     ;;            # mt7988a BPI-R4 DTS — keep
-            999-eth-*|999-hnat-*|\
-            999-net-*|999-tnl-*)           ;;            # functional patches — keep
-            *)                             continue ;;  # anything else — skip
-        esac
-        cp -n "$_patch" target/linux/mediatek/patches-6.12/ || true
-    done
-    # KernelPackage definition (idempotent)
-    if ! grep -q 'KernelPackage/mediatek_hnat' target/linux/mediatek/modules.mk 2>/dev/null; then
-        cat >> target/linux/mediatek/modules.mk << 'MODULES_EOF'
-
-define KernelPackage/mediatek_hnat
-  SUBMENU:=Network Devices
-  TITLE:=Mediatek HNAT module
-  DEPENDS:=@TARGET_mediatek +kmod-nf-conntrack
-  KCONFIG:= \
-	CONFIG_BRIDGE_NETFILTER=y \
-	CONFIG_NETFILTER_FAMILY_BRIDGE=y \
-	CONFIG_NET_MEDIATEK_HNAT
-  FILES:=$(LINUX_DIR)/drivers/net/ethernet/mediatek/mtk_hnat/mtkhnat.ko
-  AUTOLOAD:=$(call AutoLoad,30,mtkhnat,1)
-endef
-
-define KernelPackage/mediatek_hnat/description
-  Kernel modules for MediaTek HW NAT offloading
-endef
-
-$(eval $(call KernelPackage,mediatek_hnat))
-MODULES_EOF
-        echo "kmod-mediatek_hnat: KernelPackage definition added to modules.mk"
-    fi
-    echo "kmod-mediatek_hnat: driver sources and patches installed from mtk-openwrt-feeds"
-else
-    echo "WARNING: mtk-openwrt-feeds hnat path not found at $MTK_FEEDS_HNAT" >&2
-fi
-
 # Re-apply golang replacement (feeds update reverts it)
 rm -rf feeds/packages/lang/golang
 git clone --depth=1 https://github.com/sbwml/packages_lang_golang -b 26.x feeds/packages/lang/golang
@@ -207,15 +126,7 @@ fi
 # Feed deps needed by community clones (pcre2 is in main tree since 25.12)
 ./scripts/feeds install c-ares udns
 
-# MTK NPU hardware offload packages (MT7988 / BPI-R4).
-# mtk-openwrt-feeds is registered above; feeds install -a already ran,
-# so explicitly install the npu packages to ensure they are indexed.
-# ref: https://github.com/mediatek/mtk-openwrt-feeds/commit/822c2f0603614e47ec8496571043431494fd2841
-./scripts/feeds install \
-    kmod-npu npu-rebb-fw \
-    kmod-npu-flow kmod-npu-flow-autoload \
-    kmod-npu-nf_hnat kmod-npu-nf_hnat-autoload \
-    kmod-npu-mcast kmod-npu-mcast-autoload
+
 
 # Remove kiddin9 APK repo (triggers broken video/ sub-repo)
 for f in \
