@@ -177,18 +177,18 @@ patch_makefile_dep \
     'CONFIG_BOOTDELAY=30' \
     'CONFIG_BOOTDELAY=10'
 
-# Apply LuCI patches for master/25.12 only.
+# Apply LuCI patches for master/25.12 (regenerated 2026-07-03 against openwrt-25.12).
+# Each call is guarded with || true: if the luci feed has moved past the patch's
+# base commit the apply fails silently rather than aborting the build.
+
+# RPCD: add getWifiStationHints ubus method + helper functions
+[ -f feeds/luci/modules/luci-base/root/usr/share/rpcd/ucode/luci ] && \
+    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/1000-luci-rpcd-getWifiStationHints-master.patch" || true
+
+# 60_wifi.js: wifi7/MLO station hints + mhz_hi support (merged 1000+1002)
 [ -f feeds/luci/modules/luci-mod-status/htdocs/luci-static/resources/view/status/include/60_wifi.js ] && \
-    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/1000-luci-status-overview-wifi7-mlo-master.patch"
+    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/1000-luci-status-60wifi-master.patch" || true
 
+# wireless.js: station hints + mtk mode matrix + MLO OFDMA (merged 1001+999+1003)
 [ -f feeds/luci/modules/luci-mod-network/htdocs/luci-static/resources/view/network/wireless.js ] && \
-    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/1001-luci-network-wireless-station-hints-master.patch"
-
-[ -f feeds/luci/modules/luci-mod-network/htdocs/luci-static/resources/view/network/wireless.js ] && \
-    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/999-luci-wireless-mtk-mode-matrix-master.patch"
-
-[ -f feeds/luci/modules/luci-mod-status/htdocs/luci-static/resources/view/status/include/60_wifi.js ] && \
-    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/1002-luci-status-overview-rate-mhz-hi-master.patch"
-
-[ -f feeds/luci/modules/luci-mod-network/htdocs/luci-static/resources/view/network/wireless.js ] && \
-    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/1003-luci-wireless-mtk-mlo-ofdma-controls-master.patch"
+    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/1001-luci-wireless-combined-master.patch" || true
