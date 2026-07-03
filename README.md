@@ -10,3 +10,4 @@
 * https://github.com/immortalwrt/immortalwrt
 * https://github.com/friendlyarm/friendlywrt
 * https://github.com/P3TERX/Actions-OpenWrt
+* https://github.com/padavanonly/immortalwrt-mt798x-6.6
