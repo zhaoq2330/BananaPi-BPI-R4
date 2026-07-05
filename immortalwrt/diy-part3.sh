@@ -86,7 +86,7 @@ patch_bpi_r4_sysupgrade_itb_check() {
     grep -q 'dd if="$1" bs=1 skip=257 count=5' "$platform_sh" || return 0
 
     perl -0pi -e '
-        $count = s/\n\tmediatek,mt7988a-rfb\|\\\n\tbananapi,bpi-r4\|\\\n\tbananapi,bpi-r4-poe\|\\\n\tbananapi,bpi-r4-pro\|\\\n\ttplink,tl-7dr7230-rev1\.0-sp2\|\\\n\ttplink,tl-7dr7299-v1\)\n\t\tmagic="\$\(dd if="\$1" bs=1 skip=257 count=5 2>\/dev\/null\)"\n\n\t\t\[ "\$magic" != "ustar" \] && \{\n\t\t\techo "Invalid image type\."\n\t\t\treturn 1\n\t\t\}\n\n\t\treturn 0\n\t\t;;/\n\tbananapi,bpi-r4|\\\n\tbananapi,bpi-r4-poe|\\\n\tbananapi,bpi-r4-pro)\n\t\t[ "\$(identify_magic_long "\$magic")" != "fit" ] && {\n\t\t\techo "Invalid image type."\n\t\t\treturn 1\n\t\t}\n\n\t\treturn 0\n\t\t;;\n\tmediatek,mt7988a-rfb|\\\n\ttplink,tl-7dr7230-rev1.0-sp2|\\\n\ttplink,tl-7dr7299-v1)\n\t\tmagic="\$(dd if="\$1" bs=1 skip=257 count=5 2>\/dev\/null)"\n\n\t\t[ "\$magic" != "ustar" ] && {\n\t\t\techo "Invalid image type."\n\t\t\treturn 1\n\t\t}\n\n\t\treturn 0\n\t\t;;/s;
+        $count = s/\n\tmediatek,mt7988a-rfb\|\\\n\tbananapi,bpi-r4\|\\\n\tbananapi,bpi-r4-poe\|\\\n\tbananapi,bpi-r4-pro\|\\\n\ttplink,tl-7dr7230-rev1\.0-sp2\|\\\n\ttplink,tl-7dr7299-v1\)\n\t\tmagic="\$\(dd if="\$1" bs=1 skip=257 count=5 2>\/dev\/null\)"\n\n\t\t\[ "\$magic" != "ustar" \] && \{\n\t\t\techo "Invalid image type\."\n\t\t\treturn 1\n\t\t\}\n\n\t\treturn 0\n\t\t;;/\n\tmediatek,mt7988a-rfb|\\\n\tbananapi,bpi-r4|\\\n\tbananapi,bpi-r4-poe|\\\n\tbananapi,bpi-r4-pro|\\\n\ttplink,tl-7dr7230-rev1.0-sp2|\\\n\ttplink,tl-7dr7299-v1)\n\t\t[ "\$(identify_magic_long "\$magic")" != "fit" ] && {\n\t\t\techo "Invalid image type."\n\t\t\treturn 1\n\t\t}\n\n\t\treturn 0\n\t\t;;/s;
         END { exit($count ? 0 : 2); }
     ' "$platform_sh"
 }
@@ -193,8 +193,8 @@ popd
 sed -i 's|24.10-SNAPSHOT|24.10.6|g' include/version.mk
 sed -i 's|24.10-SNAPSHOT|24.10.6|g' package/base-files/image-config.in
 
-# padavanonly filogic_a73 builds BPI-R4 as sysupgrade.itb, but its
-# platform_check_image still checked BPI-R4 like a tar sysupgrade.bin image.
+# padavanonly filogic_a73 upgrades these boards via fit_do_upgrade, but
+# platform_check_image still checked them like tar sysupgrade.bin images.
 patch_bpi_r4_sysupgrade_itb_check
 
 # Belt-and-suspenders: uci-defaults script that writes the correct distfeeds.conf
