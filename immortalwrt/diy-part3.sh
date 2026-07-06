@@ -78,12 +78,14 @@ install_sfp_warm_reboot_patches() {
         install_kernel_patch "$patch_root/$patch_name" "$patch_name"
     done
 
-    # woziwrt community SFP/PCS patches for padavanonly 6.6 kernel
+    # woziwrt community SFP/PCS patches for padavanonly 6.6 kernel.
+    # 999-2784 (PCS Lynxi speed guard) is omitted: it depends on
+    # mtk_pcs_lynxi_update_state() which was introduced in Linux 6.7+
+    # via the link_poll backport and does not exist in 6.6.
     for patch_name in \
         999-2781-sfp-add-xgspon-module-quirks-6.6.patch \
         999-2782-sfp-rtl8261be-rollball-probe-fix-6.6.patch \
-        999-2783-sfp-rtl8261be-1g-reprobe-watchdog-6.6.patch \
-        999-2784-pcs-mtk-lynxi-hold-link-down-invalid-speed-6.6.patch
+        999-2783-sfp-rtl8261be-1g-reprobe-watchdog-6.6.patch
     do
         install_kernel_patch "$patch_root/$patch_name" "$patch_name"
     done
