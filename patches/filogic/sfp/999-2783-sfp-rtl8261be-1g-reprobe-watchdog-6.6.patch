@@ -64,6 +64,7 @@ Signed-off-by: Petr Wozniak <petr.wozniak@gmail.com>
  	struct delayed_work poll;
  	struct delayed_work timeout;
 +	struct delayed_work reprobe;
+ 
 @@ -284,6 +298,8 @@
  
  	unsigned char sm_phy_retries;
@@ -72,6 +73,7 @@ Signed-off-by: Petr Wozniak <petr.wozniak@gmail.com>
 +	bool sm_reprobing;
 +
  	struct sfp_eeprom_id id;
+ 
 @@ -1976,7 +1992,7 @@
  static void sfp_sm_link_up(struct sfp *sfp)
  {
