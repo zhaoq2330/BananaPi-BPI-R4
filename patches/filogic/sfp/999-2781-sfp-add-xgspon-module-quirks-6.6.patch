@@ -21,12 +21,7 @@ Signed-off-by: Petr Wozniak <petr.wozniak@gmail.com>
 
 --- a/drivers/net/phy/sfp.c
 +++ b/drivers/net/phy/sfp.c
-@@ -524,6 +524,14 @@
- 	// Fiberstore GPON-ONU-34-20BI can operate at 2500base-X, but report 1.2GBd
- 	// NRZ in their EEPROM
- 	SFP_QUIRK_M("FS", "GPON-ONU-34-20BI", sfp_quirk_2500basex,
- 		    sfp_fixup_ignore_tx_fault),
- 
+@@ -524,2 +524,10 @@
 +	/* Zaram ZXOS11NPI XGS-PON module (SFP+) */
 +	SFP_QUIRK_F("Zaram", "ZXOS11NPI", sfp_fixup_ignore_tx_fault),
 +	/* HSGQ NU-STICK1.0 XGS-PON module (SFP+) */
