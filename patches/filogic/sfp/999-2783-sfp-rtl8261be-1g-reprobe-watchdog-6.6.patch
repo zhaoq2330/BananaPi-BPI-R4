@@ -77,7 +77,7 @@ Signed-off-by: Petr Wozniak <petr.wozniak@gmail.com>
 +	struct delayed_work reprobe;
  
 @@ -284,5 +298,9 @@
- 
+ 	unsigned char sm_fault_retries;
  	unsigned char sm_phy_retries;
  
 +	unsigned char sm_reprobe_tries;
@@ -95,10 +95,9 @@ Signed-off-by: Petr Wozniak <petr.wozniak@gmail.com>
  }
  
  static void sfp_sm_link_down(struct sfp *sfp)
-@@ -2439,5 +2456,12 @@ static int sfp_sm_mod_probe(struct sfp *sfp, bool report)
+@@ -2439,4 +2456,11 @@ static int sfp_sm_mod_probe(struct sfp *sfp, bool report)
  	if (sfp->quirk && sfp->quirk->fixup)
  		sfp->quirk->fixup(sfp);
- 
 +	/* Enable reprobe watchdog only for copper SFP+ modules (e.g.
 +	 * RTL8261BE-based) that may change advertised speeds after
 +	 * link partner negotiation. GPON/fiber are unaffected.
