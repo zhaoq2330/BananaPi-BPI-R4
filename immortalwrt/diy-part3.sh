@@ -67,12 +67,25 @@ install_sfp_warm_reboot_patches() {
 
     [ -d "$patch_root" ] || return 0
 
+    # padavanonly MTK vendor SFP patches (existing)
     for patch_name in \
         999-2753-net-phy-sfp-support-additional-RollBall-modules.patch \
         999-2754-net-phy-sfp-support-shared-mod-def0-gpio.patch \
         999-2764-net-phy-sfp-add-some-FS-copper-SFP-fixes.patch \
         999-2765-net-phy-sfp-add-some-checksum-fail-SFP-war.patch \
         999-2769-net-phy-aquantia-add-software-reset-to-aqr107_probe.patch
+    do
+        install_kernel_patch "$patch_root/$patch_name" "$patch_name"
+    done
+
+    # woziwrt community SFP/PCS patches for padavanonly 6.6 kernel.
+    # 999-2784 (PCS Lynxi speed guard) is omitted: it depends on
+    # mtk_pcs_lynxi_update_state() which was introduced in Linux 6.7+
+    # via the link_poll backport and does not exist in 6.6.
+    for patch_name in \
+        999-2781-sfp-add-xgspon-module-quirks-6.6.patch \
+        999-2782-sfp-rtl8261be-rollball-probe-fix-6.6.patch \
+        999-2783-sfp-rtl8261be-1g-reprobe-watchdog-6.6.patch
     do
         install_kernel_patch "$patch_root/$patch_name" "$patch_name"
     done

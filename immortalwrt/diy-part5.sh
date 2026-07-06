@@ -1,4 +1,17 @@
 #!/bin/bash
+#
+# diy-part5.sh — ImmortalWrt 25.12 feeds & community packages
+#   (runs AFTER diy-mtk-sdk.sh which sets up MTK SDK patches + feed)
+#
+
+# ── MTK SDK feed guard ────────────────────────────────────────────────
+# Ensure MTK feed is registered (idempotent — diy-mtk-sdk.sh may
+# have already added it; if not, add it now from the cloned SDK dir).
+MTK_SDK_DIR="${MTK_SDK_DIR:-${GITHUB_WORKSPACE}/mtk-openwrt-feeds}"
+if [ -d "$MTK_SDK_DIR/feed/kernel" ] && ! grep -q "mtk_openwrt_feed" feeds.conf.default 2>/dev/null; then
+    echo "src-link mtk_openwrt_feed ${MTK_SDK_DIR}/feed" >> feeds.conf.default
+    echo "[MTK-SDK] Added MTK feed to feeds.conf.default"
+fi
 
 merge_package(){
     repo=`echo $1 | rev | cut -d'/' -f 1 | rev`
@@ -80,10 +93,6 @@ mkdir -p package/OpenClash
 pushd package/OpenClash
 git clone --depth=1 https://github.com/vernesong/OpenClash
 popd
-
-# Re-apply golang replacement (feeds update reverts it)
-rm -rf feeds/packages/lang/golang
-git clone --depth=1 https://github.com/sbwml/packages_lang_golang -b 26.x feeds/packages/lang/golang
 
 # Fix non-deterministic PKG_MIRROR_HASH in helloworld/shadowsocks-libev
 patch_makefile_dep \
