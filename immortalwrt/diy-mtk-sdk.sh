@@ -441,6 +441,34 @@ main() {
     # 9. 注册 MTK feed 源
     add_mtk_feed
 
+    # 10. MTK SDK patches-base 0980 添加了 fdt-patch-dm-verify 工具依赖，
+    #     但该工具源文件在 autobuild 框架中，未随 25.12/files/ 提供。
+    #     BPI-R4 不使用 DM-verity secure boot，创建最小 stub 绕过构建。
+    local stub_tool="${OPENWRT_ROOT}/tools/fdt-patch-dm-verify"
+    if [ ! -f "$stub_tool/Makefile" ]; then
+        mkdir -p "$stub_tool"
+        cat > "$stub_tool/Makefile" <<'MKEOF'
+include $(TOPDIR)/rules.mk
+
+PKG_NAME:=fdt-patch-dm-verify
+PKG_RELEASE:=1
+
+include $(INCLUDE_DIR)/host-build.mk
+
+define Host/Compile
+endef
+
+define Host/Install
+	$(INSTALL_DIR) $(STAGING_DIR_HOST)/bin
+	touch $(STAGING_DIR_HOST)/bin/fdt-patch-dm-verify
+	chmod +x $(STAGING_DIR_HOST)/bin/fdt-patch-dm-verify
+endef
+
+$(eval $(call HostBuild))
+MKEOF
+        log_info "Created stub for fdt-patch-dm-verify (not needed for BPI-R4)"
+    fi
+
     # ── 总结 ─────────────────────────────────────────────────────────
     echo ""
     echo "============================================================================"
