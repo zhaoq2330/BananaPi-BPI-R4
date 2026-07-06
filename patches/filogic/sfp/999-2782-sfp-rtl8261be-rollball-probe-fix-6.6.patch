@@ -28,11 +28,15 @@ existing SFP quirk patches (999-2753, 999-2754, 999-2764, 999-2765)
 already applied.  The mdio-i2c.c changes have no conflicts with any
 existing padavanonly patches.
 
+The sfp_sm_add_mdio_bus() change from the 25.12 version is omitted
+here — this function was introduced in Linux 6.7+ and does not exist
+in the 6.6 kernel.
+
 Signed-off-by: Petr Wozniak <petr.wozniak@gmail.com>
 ---
  drivers/net/mdio/mdio-i2c.c | 48 ++++++++++++++++++++++++++++++++++++--------
- drivers/net/phy/sfp.c       | 10 +++++++--
- 2 files changed, 48 insertions(+), 10 deletions(-)
+ drivers/net/phy/sfp.c       |  1 +
+ 2 files changed, 41 insertions(+), 8 deletions(-)
 
 --- a/drivers/net/mdio/mdio-i2c.c
 +++ b/drivers/net/mdio/mdio-i2c.c
@@ -127,29 +131,5 @@ Signed-off-by: Petr Wozniak <petr.wozniak@gmail.com>
  	SFP_QUIRK_F("ETU", "ESP-T5-R", sfp_fixup_rollball_cc),
  	SFP_QUIRK_F("OEM", "SFP-10G-T", sfp_fixup_rollball_cc),
  	SFP_QUIRK_M("OEM", "SFP-2.5G-T", sfp_quirk_oem_2_5g),
-@@ -2026,13 +2027,20 @@
- 
- static int sfp_sm_add_mdio_bus(struct sfp *sfp)
- {
-+	int ret;
-+
- 	dev_info(sfp->dev, "probing phy device through the [%s] protocol\n",
- 		 mdio_i2c_proto_type(sfp->mdio_protocol));
- 
--	if (sfp->mdio_protocol != MDIO_I2C_NONE)
--		return sfp_i2c_mdiobus_create(sfp);
-+	if (sfp->mdio_protocol == MDIO_I2C_NONE)
-+		return 0;
- 
--	return 0;
-+	ret = sfp_i2c_mdiobus_create(sfp);
-+	if (ret == -ENODEV) {
-+		sfp->mdio_protocol = MDIO_I2C_NONE;
-+		return 0;
-+	}
-+	return ret;
- }
- 
- /* Probe a SFP for a PHY device if the module supports copper - the PHY
 -- 
 2.45.0
