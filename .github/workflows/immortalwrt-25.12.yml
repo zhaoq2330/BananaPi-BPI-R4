@@ -13,6 +13,7 @@ env:
   REPO_URL: https://github.com/immortalwrt/immortalwrt
   REPO_BRANCH: openwrt-25.12
   CONFIG_FILE: immortalwrt/MTK/defconfig
+  DIY_P0_SH: immortalwrt/diy-mtk-sdk.sh
   DIY_P1_SH: immortalwrt/diy-part5.sh
   DIY_P2_SH: immortalwrt/diy-part6.sh
   UPLOAD_FIRMWARE: true
@@ -20,6 +21,8 @@ env:
   TZ: Asia/Shanghai
   OPENWRT_NAME: immortalwrt
   OPENWRT_DEVICE: mediatek
+  MTK_SDK_URL: https://github.com/mediatek/mtk-openwrt-feeds.git
+  MTK_SDK_BRANCH: main
 
 jobs:
   build:
@@ -86,12 +89,46 @@ jobs:
         restore-keys: |
           ccache-${{ env.OPENWRT_NAME }}-${{ env.OPENWRT_DEVICE }}-${{ env.REPO_BRANCH }}-
 
-    - name: Update base feed indexes
+    - name: Clone MTK SDK
+      run: |
+        MTK_SDK_DIR="${{ github.workspace }}/mtk-openwrt-feeds"
+        if [ -d "$MTK_SDK_DIR/.git" ]; then
+          echo "MTK SDK already cached, pulling latest..."
+          git -C "$MTK_SDK_DIR" fetch origin "${{ env.MTK_SDK_BRANCH }}" --depth=1 || true
+          git -C "$MTK_SDK_DIR" checkout "${{ env.MTK_SDK_BRANCH }}" || true
+        else
+          echo "Cloning MTK SDK..."
+          git clone --depth=1 --branch "${{ env.MTK_SDK_BRANCH }}" "${{ env.MTK_SDK_URL }}" "$MTK_SDK_DIR"
+        fi
+        echo "MTK_SDK_DIR=$MTK_SDK_DIR" >> $GITHUB_ENV
+        echo "MTK SDK ready at $MTK_SDK_DIR"
+
+    - name: Apply MTK SDK patches and files
+      run: |
+        chmod +x $OPENWRT_NAME/*.sh
+        cd openwrt
+        export MTK_SDK_DIR="${{ env.MTK_SDK_DIR }}"
+        export GITHUB_WORKSPACE="${{ github.workspace }}"
+        $GITHUB_WORKSPACE/$DIY_P0_SH
+
+    - name: Show MTK SDK conflict report
+      if: always()
+      run: |
+        if [ -f "${{ github.workspace }}/mtk-sdk-conflict-log.txt" ]; then
+          echo "=== MTK SDK Conflict Report ==="
+          cat "${{ github.workspace }}/mtk-sdk-conflict-log.txt"
+        fi
+        if [ -f "${{ github.workspace }}/mtk-sdk-skipped-log.txt" ]; then
+          echo "=== MTK SDK Skipped Patches ==="
+          cat "${{ github.workspace }}/mtk-sdk-skipped-log.txt"
+        fi
+
+    - name: Update base feed indexes (incl. MTK feed)
       working-directory: ./openwrt
       run: |
         ./scripts/feeds update -a
 
-    - name: Load feeds.conf.default
+    - name: Load feeds and community packages
       run: |
         chmod +x $OPENWRT_NAME/*.sh
         cd openwrt
