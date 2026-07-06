@@ -369,6 +369,56 @@ clean_conflicting_immortalwrt_patches() {
     fi
 }
 
+# ── 第七步：验证关键构建工具完整性 ──────────────────────────────────────
+# MTK SDK 的 25.12/files/ 覆盖或 patches-base 的 --reject 局部应用
+# 可能损坏 tools/Makefile 或删除标准工具目录。
+verify_critical_tools() {
+    log_step "Verifying critical build tools after SDK overlay..."
+
+    local tools_makefile="${OPENWRT_ROOT}/tools/Makefile"
+    local restored=0
+
+    restore_tool_dir() {
+        local tool="$1"
+
+        if [ ! -d "${OPENWRT_ROOT}/tools/${tool}" ]; then
+            log_error "  tools/${tool} directory missing — restoring from git"
+            if git -C "$OPENWRT_ROOT" checkout -- "tools/${tool}" 2>/dev/null; then
+                log_info "  Restored tools/${tool}/"
+                restored=$((restored + 1))
+            else
+                log_error "  FAILED to restore tools/${tool}/"
+            fi
+        fi
+    }
+
+    ensure_tool_makefile_entry() {
+        local tool="$1"
+
+        [ -f "$tools_makefile" ] || return 0
+        grep -qw "$tool" "$tools_makefile" && return 0
+
+        log_warn "  tools/Makefile missing '${tool}' — adding minimal tools-y entry"
+        printf '\n# Restored by diy-mtk-sdk.sh after MTK SDK overlay\n' >> "$tools_makefile"
+        printf 'tools-y += %s\n' "$tool" >> "$tools_makefile"
+        restored=$((restored + 1))
+    }
+
+    # 检查 ar-tool 目录 — 本次 CI 报错 "No such file or directory"
+    restore_tool_dir "ar-tool"
+
+    # 不整文件恢复 tools/Makefile，避免抹掉 MTK SDK patches-base 的新增工具。
+    ensure_tool_makefile_entry "ar-tool"
+
+    # 通用检查：确保 tools/ 下核心目录存在
+    for tool in padjffs2 firmware-utils; do
+        restore_tool_dir "$tool"
+    done
+
+    [ "$restored" -gt 0 ] && log_warn "  Restored $restored critical tool(s) from git"
+    [ "$restored" -eq 0 ] && log_info "  All critical tools present"
+}
+
 # ── 主流程 ──────────────────────────────────────────────────────────────
 main() {
     echo ""
@@ -438,6 +488,10 @@ main() {
     # 8. 应用 patches-base
     apply_patches_safe "$MTK_SDK_DIR/25.12/patches-base" "patches-base"
 
+    # 8.5. 验证关键构建工具完整性
+    #       MTK SDK 的文件覆盖和补丁可能破坏标准工具链。
+    verify_critical_tools
+
     # 9. 注册 MTK feed 源
     add_mtk_feed
 
@@ -467,6 +521,15 @@ endef
 $(eval $(call HostBuild))
 MKEOF
         log_info "Created stub for fdt-patch-dm-verify (not needed for BPI-R4)"
+    fi
+
+    if ! grep -qw 'fdt-patch-dm-verify' "${OPENWRT_ROOT}/tools/Makefile" 2>/dev/null; then
+        {
+            echo ""
+            echo "# Added by diy-mtk-sdk.sh for MTK SDK secure-boot tool dependency"
+            echo "tools-y += fdt-patch-dm-verify"
+        } >> "${OPENWRT_ROOT}/tools/Makefile"
+        log_info "Added fdt-patch-dm-verify to tools/Makefile"
     fi
 
     # ── 总结 ─────────────────────────────────────────────────────────
