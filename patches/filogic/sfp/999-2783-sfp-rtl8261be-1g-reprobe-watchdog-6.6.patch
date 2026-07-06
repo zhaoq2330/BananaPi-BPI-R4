@@ -76,8 +76,8 @@ Signed-off-by: Petr Wozniak <petr.wozniak@gmail.com>
  	struct delayed_work timeout;
 +	struct delayed_work reprobe;
  
-@@ -298,5 +312,9 @@
- 	unsigned char sm_fault_retries;
+@@ -284,5 +298,9 @@
+ 
  	unsigned char sm_phy_retries;
  
 +	unsigned char sm_reprobe_tries;
