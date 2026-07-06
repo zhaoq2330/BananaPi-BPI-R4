@@ -4,10 +4,13 @@
 # ============================================================================
 # 功能:
 #   1. 克隆 mediatek/mtk-openwrt-feeds
-#   2. 扫描 patches-base / patches-feeds 与当前树冲突
-#   3. 安全应用 MTK SDK 补丁（冲突的跳过并记录）
-#   4. 复制 MTK SDK 文件覆盖层
-#   5. 添加 MTK feed 源到 feeds.conf.default
+#   2. 清除 ImmortalWrt 预置的冲突内核补丁
+#   3. 注入本地 SFP/PCS 补丁到 MTK SDK 补丁目录
+#   4. 复制 MTK SDK 文件覆盖层 → 建立补丁基线（含注入的 SFP 补丁）
+#   5. 扫描 patches-base 与基线树冲突
+#   6. 安全应用 MTK SDK patches-base（冲突的用 git apply --reject 局部应用）
+#   7. 添加 MTK feed 源到 feeds.conf.default
+#   （patches-feeds 推迟到 diy-part5.sh 中的 feeds install 之后）
 #
 # 用法:
 #   在 openwrt 源码根目录下运行:
@@ -140,10 +143,12 @@ scan_patches() {
 }
 
 # ── 第三步：安全应用补丁 ────────────────────────────────────────────────
+# 对于冲突补丁：使用 git apply --reject 尽可能应用匹配的 hunks，
+# 失败的 hunks 保存为 .rej 文件供后续审查。
 apply_patches_safe() {
     local patch_dir="$1"
     local label="$2"
-    local total=0 ok=0 skipped=0 failed=0
+    local total=0 ok=0 partial=0 skipped=0 failed=0
 
     log_step "Applying $label patches from: $patch_dir"
     [ -d "$patch_dir" ] || { log_warn "Directory not found: $patch_dir"; return 0; }
@@ -174,15 +179,34 @@ apply_patches_safe() {
                 fi
                 ;;
             conflict)
-                log_warn "  SKIP (conflict): $pname"
-                skipped=$((skipped + 1))
-                echo "  [SKIP-conflict] $label/$pname" >> "$SKIPPED_LOG"
+                # 冲突补丁：用 git apply --reject 尽可能应用匹配的 hunks
+                if [ "$DRY_RUN" = "1" ]; then
+                    log_warn "  [DRY-RUN] Would try partial apply: $pname"
+                    partial=$((partial + 1))
+                elif git apply --reject --whitespace=fix "$pf" 2>/dev/null; then
+                    log_info "  Partial apply OK: $pname"
+                    partial=$((partial + 1))
+                    echo "  [PARTIAL] $label/$pname" >> "$APPLIED_LOG"
+                elif git apply --reject --whitespace=fix -3 "$pf" 2>/dev/null; then
+                    log_info "  Partial apply (3-way): $pname"
+                    partial=$((partial + 1))
+                    echo "  [PARTIAL-3way] $label/$pname" >> "$APPLIED_LOG"
+                else
+                    log_warn "  PARTIAL (hunks rejected): $pname"
+                    partial=$((partial + 1))
+                    echo "  [REJECTS] $label/$pname — check *.rej files" >> "$SKIPPED_LOG"
+                    # 清理 .rej 文件到专门目录便于审查
+                    local rej_dir="${OPENWRT_ROOT}/.mtk-sdk-rejects"
+                    mkdir -p "$rej_dir"
+                    find "${OPENWRT_ROOT}" -name "*.rej" -newer "${OPENWRT_ROOT}/.timestamp" \
+                        -exec mv {} "$rej_dir/" \; 2>/dev/null || true
+                fi
                 ;;
         esac
     done
 
-    printf "  ${label}: total=%d applied=%d skipped=%d failed=%d\n\n" \
-        "$total" "$ok" "$skipped" "$failed"
+    printf "  ${label}: total=%d applied=%d partial=%d skipped=%d failed=%d\n\n" \
+        "$total" "$ok" "$partial" "$skipped" "$failed"
 }
 
 # ── 第四步：安全复制文件覆盖层 ──────────────────────────────────────────
@@ -369,56 +393,52 @@ main() {
     # 2. 清理冲突
     clean_conflicting_immortalwrt_patches
 
-    # 3. 扫描所有补丁（报告用）
-    scan_patches "$MTK_SDK_DIR/25.12/patches-base" "patches-base" || true
-    scan_patches "$MTK_SDK_DIR/25.12/patches-feeds" "patches-feeds" || true
-
-    # 4. 应用 patches-base
-    apply_patches_safe "$MTK_SDK_DIR/25.12/patches-base" "patches-base"
-
-    # 5. 应用 patches-feeds
-    apply_patches_safe "$MTK_SDK_DIR/25.12/patches-feeds" "patches-feeds"
-
-    # 5.5. 应用本地社区 SFP/PCS 补丁（woziwrt 来源，25.12 专用）
-    #       这些补丁直接复制到内核补丁目录，由内核构建系统后续自动应用。
-    #       排除 -6.6.patch 后缀的补丁（这些是为 padavanonly 6.6 准备的）
+    # 3. 注入本地 SFP/PCS 补丁到 MTK SDK 的 patches-6.12 目录
+    #    参考 woziwrt: 在 autobuild/文件覆盖之前注入，确保补丁作为
+    #    MTK SDK 基线的一部分被复制到 OpenWrt 树。
     local local_sfp_dir="${GITHUB_WORKSPACE}/patches/filogic/sfp"
     if [ -d "$local_sfp_dir" ]; then
-        log_step "Staging local SFP/PCS patches (25.12 only) from: $local_sfp_dir"
-        local sfp_target="${OPENWRT_ROOT}/target/linux/mediatek/patches-6.12"
-        mkdir -p "$sfp_target"
+        local mtk_patch_dir="$MTK_SDK_DIR/25.12/files/target/linux/mediatek/patches-6.12"
+        mkdir -p "$mtk_patch_dir"
         local sfp_copied=0 sfp_skipped_66=0
         for sfp_patch in "$local_sfp_dir"/*.patch; do
             [ -f "$sfp_patch" ] || continue
             local sfp_name; sfp_name=$(basename "$sfp_patch")
-            # 排除 6.6 专用补丁（这些是给 padavanonly 用的，不能用于 6.12）
             case "$sfp_name" in
                 *-6.6.patch)
-                    log_info "  Skip (6.6-only): $sfp_name"
                     sfp_skipped_66=$((sfp_skipped_66 + 1))
                     ;;
                 *)
-                    cp -f "$sfp_patch" "$sfp_target/$sfp_name"
+                    cp -f "$sfp_patch" "$mtk_patch_dir/$sfp_name"
                     sfp_copied=$((sfp_copied + 1))
-                    log_info "  Staged: $sfp_name → patches-6.12/"
                     ;;
             esac
         done
-        log_info "  Staged $sfp_copied local SFP patches (skipped $sfp_skipped_66 6.6-only)"
-    else
-        log_warn "  Local SFP patches dir not found: $local_sfp_dir"
+        log_info "Injected $sfp_copied SFP patches into MTK SDK (skipped $sfp_skipped_66 6.6-only)"
     fi
 
-    # 6. 复制文件覆盖层
+    # 4. 复制 MTK SDK 文件覆盖层 — 必须在打补丁之前！
+    #    将 MTK SDK 的 25.12/files/（含步骤 3 注入的 SFP 补丁）复制到
+    #    OpenWrt 树，建立 MTK 基线。patches-base 预期修改的是这些
+    #    基线文件（如 filogic.mk, platform.sh, 02_network 等）。
     copy_files_safe "$MTK_SDK_DIR/25.12/files" "25.12/files"
 
-    # 7. 复制 filogic 特定文件（如果存在）
+    # 5. 复制 filogic 特定文件
     local filogic_files="$MTK_SDK_DIR/autobuild/unified/filogic/25.12/files"
     if [ -d "$filogic_files" ]; then
         copy_files_safe "$filogic_files" "filogic/25.12/files"
     fi
 
-    # 8. 添加 MTK feed 源
+    # 6. 创建时间戳标记
+    touch "${OPENWRT_ROOT}/.timestamp"
+
+    # 7. 扫描 patches-base
+    scan_patches "$MTK_SDK_DIR/25.12/patches-base" "patches-base" || true
+
+    # 8. 应用 patches-base
+    apply_patches_safe "$MTK_SDK_DIR/25.12/patches-base" "patches-base"
+
+    # 9. 注册 MTK feed 源
     add_mtk_feed
 
     # ── 总结 ─────────────────────────────────────────────────────────
