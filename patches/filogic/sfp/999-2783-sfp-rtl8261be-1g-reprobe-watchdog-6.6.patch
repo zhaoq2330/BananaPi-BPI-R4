@@ -71,20 +71,13 @@ Signed-off-by: Petr Wozniak <petr.wozniak@gmail.com>
  /* SFP modules appear to always have their PHY configured for bus address
   * 0x56 (which with mdio-i2c, translates to a PHY address of 22).
   * RollBall SFPs access phy via SFP Enhanced Digital Diagnostic Interface
-@@ -290,3 +290,4 @@
+@@ -290,3 +290,7 @@
  	struct delayed_work poll;
  	struct delayed_work timeout;
 +	struct delayed_work reprobe;
- 
-@@ -298,5 +312,9 @@
- 	unsigned char sm_fault_retries;
- 	unsigned char sm_phy_retries;
- 
 +	unsigned char sm_reprobe_tries;
 +	bool sm_reprobing;
 +	bool sm_reprobe_enabled;
-+
- 	struct sfp_eeprom_id id;
  
 @@ -1976,7 +1993,7 @@
  static void sfp_sm_link_up(struct sfp *sfp)

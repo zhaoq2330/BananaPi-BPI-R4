@@ -381,8 +381,9 @@ verify_critical_tools() {
     restore_tool_dir() {
         local tool="$1"
 
-        if [ ! -d "${OPENWRT_ROOT}/tools/${tool}" ]; then
-            log_error "  tools/${tool} directory missing — restoring from git"
+        if [ ! -d "${OPENWRT_ROOT}/tools/${tool}" ] || \
+           [ ! -f "${OPENWRT_ROOT}/tools/${tool}/Makefile" ]; then
+            log_error "  tools/${tool} directory or Makefile missing — restoring from git"
             if git -C "$OPENWRT_ROOT" checkout -- "tools/${tool}" 2>/dev/null; then
                 log_info "  Restored tools/${tool}/"
                 restored=$((restored + 1))
