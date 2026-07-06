@@ -104,7 +104,7 @@ index d4e5f6a7b..e5f6a7b8c 100644
 +	sfp->sm_reprobe_enabled =
 +		sfp->id.base.connector == SFF8024_CONNECTOR_RJ45;
 +
- 	sfp->state_hw_mask &= ~sfp->state_ignore_mask;
+ 	mutex_unlock(&sfp->st_mutex);
  
 @@ -2598,6 +2622,8 @@ static void sfp_sm_module(struct sfp *sfp, unsigned int event)
  
