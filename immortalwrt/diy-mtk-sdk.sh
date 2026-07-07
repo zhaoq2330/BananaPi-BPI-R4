@@ -100,6 +100,23 @@ check_patch() {
     return 2
 }
 
+is_destructive_mtk_patch() {
+    local patch_file="$1"
+    local label="$2"
+
+    [ "$label" = "patches-base" ] || return 1
+
+    # MTK patches-base 0980 changes tools/Makefile for secure boot helpers.
+    # On ImmortalWrt this can drop standard tool entries such as ar-tool when
+    # applied through --reject.  Skip it and add only the BPI-R4-safe stubs
+    # later in this script.
+    if grep -Eq '(^--- |^\+\+\+ ).*tools/Makefile|fdt-patch-dm-verify' "$patch_file"; then
+        return 0
+    fi
+
+    return 1
+}
+
 # 扫描目录内所有 patch，生成冲突报告
 scan_patches() {
     local patch_dir="$1"
@@ -112,6 +129,14 @@ scan_patches() {
     for pf in $(find "$patch_dir" -name "*.patch" -type f | sort); do
         total=$((total + 1))
         local pname; pname=$(basename "$pf")
+
+        if is_destructive_mtk_patch "$pf" "$label"; then
+            conflict=$((conflict + 1))
+            echo "  ${YELLOW}!${NC} $pname - destructive toolchain patch (skip; fixed later)"
+            echo "    [SKIP-DESTRUCTIVE] $label: $pname" >> "$CONFLICT_LOG"
+            continue
+        fi
+
         local result; result=$(check_patch "$pf") || true
 
         case "$result" in
@@ -156,6 +181,14 @@ apply_patches_safe() {
     for pf in $(find "$patch_dir" -name "*.patch" -type f | sort); do
         total=$((total + 1))
         local pname; pname=$(basename "$pf")
+
+        if is_destructive_mtk_patch "$pf" "$label"; then
+            log_warn "  Skip destructive toolchain patch: $pname"
+            skipped=$((skipped + 1))
+            echo "  [SKIP-destructive] $label/$pname - handled by verify_critical_tools and fdt stub" >> "$SKIPPED_LOG"
+            continue
+        fi
+
         local result; result=$(check_patch "$pf") || true
 
         case "$result" in
