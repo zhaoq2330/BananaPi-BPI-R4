@@ -273,6 +273,28 @@ copy_files_safe() {
     fi
 }
 
+remove_broken_sfp_612_patches() {
+    # 999-2753 no longer matches linux 6.12.94's sfp.c quirk table.  It only
+    # adds extra ETU/TNBY/JESS-LINK RollBall quirks, while BPI-R4's OEM
+    # SFP-10G-T path is covered by the later RTL8261BE probe fix.  Remove it
+    # from both MTK SDK overlay source and the OpenWrt target patch directory.
+    local rel_patch="target/linux/mediatek/patches-6.12/999-2753-net-phy-sfp-support-additional-RollBall-modules.patch"
+    local removed=0
+
+    for patch_file in \
+        "$MTK_SDK_DIR/25.12/files/$rel_patch" \
+        "$MTK_SDK_DIR/autobuild/unified/filogic/25.12/files/$rel_patch" \
+        "$OPENWRT_ROOT/$rel_patch"; do
+        if [ -f "$patch_file" ]; then
+            rm -f "$patch_file"
+            removed=$((removed + 1))
+        fi
+    done
+
+    [ "$removed" -gt 0 ] && log_warn "Removed broken 6.12 SFP patch 999-2753 from $removed location(s)"
+    true
+}
+
 # ── 第五步：添加 MTK feed 源 ────────────────────────────────────────────
 add_mtk_feed() {
     local feeds_conf="${OPENWRT_ROOT}/feeds.conf.default"
@@ -499,6 +521,9 @@ main() {
     # 2. 清理冲突
     clean_conflicting_immortalwrt_patches
 
+    # 2.5. 移除已知不兼容 linux 6.12.94 的旧 SFP quirk 补丁
+    remove_broken_sfp_612_patches
+
     # 3. 注入本地 SFP/PCS 补丁到 MTK SDK 的 patches-6.12 目录
     #    参考 woziwrt: 在 autobuild/文件覆盖之前注入，确保补丁作为
     #    MTK SDK 基线的一部分被复制到 OpenWrt 树。
@@ -514,6 +539,13 @@ main() {
                 *-6.6.patch)
                     sfp_skipped_66=$((sfp_skipped_66 + 1))
                     ;;
+                999-2753-net-phy-sfp-support-additional-RollBall-modules.patch)
+                    # This old quirk-table patch no longer matches 6.12.94
+                    # and only adds ETU/TNBY/JESS-LINK modules.  BPI-R4's
+                    # OEM SFP-10G-T path is covered by the later RTL8261BE
+                    # probe fix, so skip 2753 on 25.12/6.12 to avoid blocking
+                    # kernel patch preparation.
+                    ;;
                 *)
                     cp -f "$sfp_patch" "$mtk_patch_dir/$sfp_name"
                     sfp_copied=$((sfp_copied + 1))
@@ -528,12 +560,14 @@ main() {
     #    OpenWrt 树，建立 MTK 基线。patches-base 预期修改的是这些
     #    基线文件（如 filogic.mk, platform.sh, 02_network 等）。
     copy_files_safe "$MTK_SDK_DIR/25.12/files" "25.12/files"
+    remove_broken_sfp_612_patches
 
     # 5. 复制 filogic 特定文件
     local filogic_files="$MTK_SDK_DIR/autobuild/unified/filogic/25.12/files"
     if [ -d "$filogic_files" ]; then
         copy_files_safe "$filogic_files" "filogic/25.12/files"
     fi
+    remove_broken_sfp_612_patches
 
     # 6. 创建时间戳标记
     touch "${OPENWRT_ROOT}/.timestamp"
