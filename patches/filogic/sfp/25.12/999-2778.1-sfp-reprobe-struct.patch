@@ -7,8 +7,8 @@ Add reprobe watchdog infrastructure fields to struct sfp:
 - sm_reprobe_tries, sm_reprobing, sm_reprobe_enabled
 
 This hunk is separated from 2779 because the MTK SDK patches-base
-shift the struct sfp definition upward by ~62 lines (the offset
-observed on other sfp.c hunks that apply successfully).
+modify struct sfp, shifting field positions.  Use minimal two-hunk
+anchors so patch's built-in fuzz can locate the target lines.
 
 Signed-off-by: Petr Wozniak <petr.wozniak@gmail.com>
 ---
@@ -19,21 +19,15 @@ diff --git a/drivers/net/phy/sfp.c b/drivers/net/phy/sfp.c
 index d4e5f6a7b..e5f6a7b8c 100644
 --- a/drivers/net/phy/sfp.c
 +++ b/drivers/net/phy/sfp.c
-@@ -200,11 +200,15 @@ struct sfp {
- 
- 	struct delayed_work poll;
+@@ -265,3 +265,4 @@ struct sfp {
  	struct delayed_work timeout;
 +	struct delayed_work reprobe;
  
  	struct mutex sm_mutex;			/* Protects state machine */
- 	unsigned char sm_mod_state;
- 	unsigned short sm_state;
- 	unsigned char sm_fault_retries;
+@@ -271,3 +272,6 @@ struct sfp {
  	unsigned char sm_phy_retries;
 +	unsigned char sm_reprobe_tries;
 +	bool sm_reprobing;
 +	bool sm_reprobe_enabled;
  
  	struct sfp_eeprom_id id;
--- 
-2.45.0
