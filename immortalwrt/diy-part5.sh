@@ -132,6 +132,29 @@ fi
 
 ./scripts/feeds install -a
 
+# ── MTK SDK patches-feeds ─────────────────────────────────────────────
+# patches-feeds 必须在 feeds install 之后应用，因为它修改的是 feed 包
+# （cryptsetup, libaio, lvm2, dm, strongswan）的 Makefile 和配置。
+apply_mtk_patches_feeds() {
+    local mtk_dir="${MTK_SDK_DIR:-${GITHUB_WORKSPACE}/mtk-openwrt-feeds}"
+    local pf_dir="$mtk_dir/25.12/patches-feeds"
+
+    [ -d "$pf_dir" ] || return 0
+    echo "[MTK-SDK] Applying patches-feeds (feed package patches)..."
+    local ok=0 fail=0
+    for pf in $(find "$pf_dir" -name "*.patch" -type f | sort); do
+        local pname; pname=$(basename "$pf")
+        if patch -p1 --force --no-backup-if-mismatch < "$pf" 2>/dev/null; then
+            ok=$((ok + 1))
+        else
+            echo "[MTK-SDK]   WARN: patches-feeds/$pname did not apply cleanly"
+            fail=$((fail + 1))
+        fi
+    done
+    echo "[MTK-SDK] patches-feeds: $ok applied, $fail skipped"
+}
+apply_mtk_patches_feeds
+
 # Feed deps needed by community clones (pcre2 is in main tree since 25.12)
 ./scripts/feeds install c-ares udns
 
