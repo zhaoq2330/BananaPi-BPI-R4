@@ -118,14 +118,9 @@ diff --git a/drivers/net/phy/sfp.c b/drivers/net/phy/sfp.c
 index c3d4e5f6a..d4e5f6a7b 100644
 --- a/drivers/net/phy/sfp.c
 +++ b/drivers/net/phy/sfp.c
-@@ -607,6 +607,7 @@ static const struct sfp_quirk sfp_quirks[] = {
- 	SFP_QUIRK_S("TP-LINK", "TL-SM410U", sfp_quirk_oem_2_5g),
- 
- 	SFP_QUIRK_F("ETU", "ESP-T5-R", sfp_fixup_rollball_cc),
+@@ -607,1 +607,2 @@ static const struct sfp_quirk sfp_quirks[] = {
 +	SFP_QUIRK_F("OEM", "SFP-10G-T-I", sfp_fixup_rollball_cc),
  	SFP_QUIRK_F("OEM", "SFP-10G-T", sfp_fixup_rollball_cc),
- 	SFP_QUIRK_S("OEM", "SFP-2.5G-T", sfp_quirk_oem_2_5g),
- 	SFP_QUIRK_S("OEM", "SFP-2.5G-BX10-D", sfp_quirk_2500basex),
 @@ -2026,13 +2027,20 @@ static void sfp_sm_fault(struct sfp *sfp, unsigned int next_state, bool warn)
  
  static int sfp_sm_add_mdio_bus(struct sfp *sfp)
