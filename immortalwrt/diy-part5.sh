@@ -58,7 +58,8 @@ apply_workspace_patch() {
 fix_mtk_flowtable_dependency() {
     # MTK flowtable feed may depend on kmod-nf-flow-netlink, which is not
     # present in ImmortalWrt 25.12. Drop the stale dependency in the SDK
-    # source, generated feed metadata, and the installed package copy.
+    # source, generated feed metadata (both per-feed indices and per-package
+    # info files), and the installed package copy.
     for flowtable_mk in \
         "${MTK_SDK_DIR}/feed/flowtable/Makefile" \
         feeds/mtk_openwrt_feed/flowtable/Makefile \
@@ -66,7 +67,11 @@ fix_mtk_flowtable_dependency() {
         [ -f "$flowtable_mk" ] && sed -i 's/[[:space:]]*+kmod-nf-flow-netlink//g' "$flowtable_mk"
     done
 
+    # Per-feed metadata (e.g. tmp/info/mtk_openwrt_feed.index)
     find tmp/info -type f -name '*mtk_openwrt_feed*' -exec \
+        sed -i 's/[[:space:]]*+kmod-nf-flow-netlink//g' {} \; 2>/dev/null || true
+    # Per-package metadata (e.g. tmp/info/flowtable.* — named by package, not feed)
+    find tmp/info -type f -name 'flowtable*' -exec \
         sed -i 's/[[:space:]]*+kmod-nf-flow-netlink//g' {} \; 2>/dev/null || true
 }
 
