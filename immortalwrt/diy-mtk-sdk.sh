@@ -131,11 +131,25 @@ is_unneeded_mtk_patch() {
             # image/upgrade script rejects from a board we do not emit.
             return 0
             ;;
+        1133-image-mediatek-filogic-add-bananapi-bpi-r4-support.patch)
+            # ImmortalWrt already carries BPI-R4 image support and the MTK file
+            # overlay establishes the local baseline.  Do not partially apply
+            # another BPI-R4 device block over it; post steps add the one SDK
+            # package dependency we actually need.
+            return 0
+            ;;
         1142-image-mediatek-filogic-mt7987a-rfb-03-add-spidev-overlays.patch|\
+        1142-image-mediatek-filogic-mt7987a-rfb-06-add-wifi-gen-dtso.patch|\
         3000-fstools-dual-boot-add-support-to-build-libfstools-bootparam.patch|\
+        3602-mediatek-filogic-base-files-remove-dm-devices-before-upgrade.patch|\
         3600-mediatek-filogic-base-files-add-support-for-MediaTek-RBFs-upgrade.patch)
             # MTK RFB/dual-boot support is not needed for BPI-R4 images and is
             # prone to noisy rejects against ImmortalWrt's base-files/fstools.
+            return 0
+            ;;
+        1146-image-mediatek-filogic-enable-kmod-mt798x-2p5g-phy.patch)
+            # Replace the broad reference-board patch with a targeted BPI-R4
+            # DEVICE_PACKAGES fix in ensure_bpi_r4_mtk_packages().
             return 0
             ;;
         3704-crypto-remove-safexcel-from-default-package.patch)
@@ -412,6 +426,44 @@ verify_local_sfp_612_patches() {
     log_info "Verified local 6.12 SFP patch split: 2778.1 present, 2779 has 11 hunks, LF-only"
 }
 
+ensure_bpi_r4_mtk_packages() {
+    local filogic_mk="${OPENWRT_ROOT}/target/linux/mediatek/image/filogic.mk"
+
+    [ -f "$filogic_mk" ] || return 0
+
+    if grep -A80 -E '^define Device/.*bananapi.*bpi-r4' "$filogic_mk" | \
+        sed '/^endef$/q' | grep -q 'kmod-mt798x-2p5g-phy'; then
+        log_info "BPI-R4 already has kmod-mt798x-2p5g-phy in DEVICE_PACKAGES"
+        return 0
+    fi
+
+    FILOGIC_MK="$filogic_mk" perl -0pi -e '
+        my $pkg = " +kmod-mt798x-2p5g-phy";
+        s{
+            (^define[ \t]+Device/[^\n]*bananapi[^\n]*bpi-r4[^\n]*\n)
+            (.*?)
+            (^endef$)
+        }{
+            my ($head, $body, $end) = ($1, $2, $3);
+            if ($body !~ /kmod-mt798x-2p5g-phy/) {
+                if ($body =~ s/^(DEVICE_PACKAGES[ \t]*(?::=|\+=)[^\n]*)$/$1$pkg/m) {
+                    # appended to existing DEVICE_PACKAGES
+                } else {
+                    $body .= "  DEVICE_PACKAGES +=$pkg\n";
+                }
+            }
+            "$head$body$end";
+        }egmsx;
+    ' "$filogic_mk"
+
+    if grep -A80 -E '^define Device/.*bananapi.*bpi-r4' "$filogic_mk" | \
+        sed '/^endef$/q' | grep -q 'kmod-mt798x-2p5g-phy'; then
+        log_info "Ensured BPI-R4 DEVICE_PACKAGES includes kmod-mt798x-2p5g-phy"
+    else
+        log_warn "Could not find BPI-R4 device block to add kmod-mt798x-2p5g-phy"
+    fi
+}
+
 # ── 第五步：添加 MTK feed 源 ────────────────────────────────────────────
 add_mtk_feed() {
     local feeds_conf="${OPENWRT_ROOT}/feeds.conf.default"
@@ -672,6 +724,9 @@ main() {
     # 8. 应用 patches-base
     apply_patches_safe "$MTK_SDK_DIR/25.12/patches-base" "patches-base"
 
+    # 8.2. 用目标板后处理替代会产生 rejects 的宽泛 MTK RFB 补丁
+    ensure_bpi_r4_mtk_packages
+
     # 8.5. 验证关键构建工具完整性
     #       MTK SDK 的文件覆盖和补丁可能破坏标准工具链。
     verify_critical_tools
@@ -725,20 +780,26 @@ MKEOF
     echo "  Applied patches:  $APPLIED_LOG"
     echo "  Skipped patches:  $SKIPPED_LOG"
     echo ""
-    if [ -s "$CONFLICT_LOG" ] && [ "$(wc -l < "$CONFLICT_LOG")" -gt 1 ]; then
-        local conflict_count
-        conflict_count=$(($(wc -l < "$CONFLICT_LOG") - 1))
-        log_warn "  $conflict_count patches had conflicts (see log)"
-        log_warn "  Conflicting hunks were partially applied via --reject"
-        log_warn "  Check .mtk-sdk-rejects/ directory for rejected hunks"
+    local prescan_conflict_count reject_count
+    prescan_conflict_count=$(grep -c '\[CONFLICT\]' "$CONFLICT_LOG" 2>/dev/null || true)
+    reject_count=$(grep -c '\[REJECTS\]' "$SKIPPED_LOG" 2>/dev/null || true)
+
+    if [ "$prescan_conflict_count" -gt 0 ]; then
+        log_warn "  $prescan_conflict_count patches conflicted during pre-scan (many apply after earlier SDK patches)"
     else
-        log_info "  No patch conflicts detected!"
+        log_info "  No pre-scan patch conflicts detected"
+    fi
+
+    if [ "$reject_count" -gt 0 ]; then
+        log_warn "  $reject_count patches still had rejected hunks; check .mtk-sdk-rejects/"
+    else
+        log_info "  No rejected hunks after patch application"
     fi
     echo "============================================================================"
     echo ""
 
-    # 冲突是预期的（ImmortalWrt 与 OpenWrt 基线差异），不应阻断构建。
-    # patches-base 中冲突的 hunks 已通过 git apply --reject 局部应用。
+    # 预扫描冲突是预期的（ImmortalWrt 与 OpenWrt 基线差异），不应阻断构建。
+    # 真正需要关注的是应用阶段是否仍产生 [REJECTS]。
     return 0
 }
 
