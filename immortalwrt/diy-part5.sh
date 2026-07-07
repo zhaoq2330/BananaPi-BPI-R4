@@ -144,7 +144,7 @@ fi
 rm -rf feeds/packages/net/onionshare-cli
 
 [ -f feeds/luci/applications/luci-app-package-manager/root/usr/libexec/package-manager-call ] && \
-    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/1004-luci-package-manager-apk-upload-untrusted-master.patch"
+    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/25.12/1004-luci-package-manager-apk-upload-untrusted-master.patch"
 
 # vpnc: add -p to mkdir for idempotency
 if grep -q 'mkdir $(PKG_BUILD_DIR)/bin' feeds/packages/net/vpnc/Makefile 2>/dev/null; then
@@ -197,7 +197,7 @@ done
 # APK runtime fixes: allow local unsigned APK uploads and disable broken feed entries
 rm -f package/base-files/files/etc/uci-defaults/99-apk-untrusted
 [ -d package/base-files/files/etc/uci-defaults ] && \
-    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/1005-base-files-apk-manager-fixes-master.patch"
+    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/25.12/1005-base-files-apk-manager-fixes-master.patch"
 
 # Verify libmbedtls presence (required by shadowsocks-libev)
 if [ ! -f package/libs/mbedtls/Makefile ]; then
@@ -241,12 +241,12 @@ patch_makefile_dep \
 
 # RPCD: add getWifiStationHints ubus method + helper functions
 [ -f feeds/luci/modules/luci-base/root/usr/share/rpcd/ucode/luci ] && \
-    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/1000-luci-rpcd-getWifiStationHints-master.patch" || true
+    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/25.12/1000-luci-rpcd-getWifiStationHints-master.patch" || true
 
 # 60_wifi.js: wifi7/MLO station hints + mhz_hi support (merged 1000+1002)
 [ -f feeds/luci/modules/luci-mod-status/htdocs/luci-static/resources/view/status/include/60_wifi.js ] && \
-    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/1000-luci-status-60wifi-master.patch" || true
+    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/25.12/1000-luci-status-60wifi-master.patch" || true
 
 # wireless.js: station hints + mtk mode matrix + MLO OFDMA (merged 1001+999+1003)
 [ -f feeds/luci/modules/luci-mod-network/htdocs/luci-static/resources/view/network/wireless.js ] && \
-    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/1001-luci-wireless-combined-master.patch" || true
+    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/25.12/1001-luci-wireless-combined-master.patch" || true
