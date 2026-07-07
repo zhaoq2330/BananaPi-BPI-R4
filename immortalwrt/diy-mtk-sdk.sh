@@ -106,11 +106,11 @@ is_destructive_mtk_patch() {
 
     [ "$label" = "patches-base" ] || return 1
 
-    # MTK patches-base 0980 changes tools/Makefile for secure boot helpers.
-    # On ImmortalWrt this can drop standard tool entries such as ar-tool when
-    # applied through --reject.  Skip it and add only the BPI-R4-safe stubs
-    # later in this script.
-    if grep -Eq '(^--- |^\+\+\+ ).*tools/Makefile|fdt-patch-dm-verify' "$patch_file"; then
+    # MTK patches-base 0980/0981 change top-level tools/Makefile for secure
+    # boot helpers. On ImmortalWrt this can drop standard tool entries such as
+    # ar-tool when applied through --reject. Skip only patches that directly
+    # touch tools/Makefile; later steps add the BPI-R4-safe stubs we need.
+    if grep -Eq '^(---|\+\+\+) [ab]/tools/Makefile' "$patch_file"; then
         return 0
     fi
 
@@ -132,8 +132,8 @@ scan_patches() {
 
         if is_destructive_mtk_patch "$pf" "$label"; then
             conflict=$((conflict + 1))
-            echo "  ${YELLOW}!${NC} $pname - destructive toolchain patch (skip; fixed later)"
-            echo "    [SKIP-DESTRUCTIVE] $label: $pname" >> "$CONFLICT_LOG"
+            echo "  ${YELLOW}!${NC} $pname - tools/Makefile patch (skip; fixed later)"
+            echo "    [SKIP-TOOLS-MAKEFILE] $label: $pname" >> "$CONFLICT_LOG"
             continue
         fi
 
@@ -183,9 +183,9 @@ apply_patches_safe() {
         local pname; pname=$(basename "$pf")
 
         if is_destructive_mtk_patch "$pf" "$label"; then
-            log_warn "  Skip destructive toolchain patch: $pname"
+            log_warn "  Skip tools/Makefile patch: $pname"
             skipped=$((skipped + 1))
-            echo "  [SKIP-destructive] $label/$pname - handled by verify_critical_tools and fdt stub" >> "$SKIPPED_LOG"
+            echo "  [SKIP-tools-makefile] $label/$pname - handled by verify_critical_tools and fdt stub" >> "$SKIPPED_LOG"
             continue
         fi
 
