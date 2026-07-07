@@ -62,17 +62,18 @@ fix_mtk_flowtable_dependency() {
     # info files), and the installed package copy.
     for flowtable_mk in \
         "${MTK_SDK_DIR}/feed/flowtable/Makefile" \
+        "${MTK_SDK_DIR}/feed/kernel/flowtable/Makefile" \
         feeds/mtk_openwrt_feed/flowtable/Makefile \
+        feeds/mtk_openwrt_feed/kernel/flowtable/Makefile \
         package/feeds/mtk_openwrt_feed/flowtable/Makefile; do
-        [ -f "$flowtable_mk" ] && sed -i 's/[[:space:]]*+kmod-nf-flow-netlink//g' "$flowtable_mk"
+        [ -f "$flowtable_mk" ] && sed -i -E 's/[[:space:]]*\+?kmod-nf-flow-netlink//g' "$flowtable_mk"
     done
 
-    # Per-feed metadata (e.g. tmp/info/mtk_openwrt_feed.index)
-    find tmp/info -type f -name '*mtk_openwrt_feed*' -exec \
-        sed -i 's/[[:space:]]*+kmod-nf-flow-netlink//g' {} \; 2>/dev/null || true
-    # Per-package metadata (e.g. tmp/info/flowtable.* — named by package, not feed)
-    find tmp/info -type f -name 'flowtable*' -exec \
-        sed -i 's/[[:space:]]*+kmod-nf-flow-netlink//g' {} \; 2>/dev/null || true
+    for dep_file in \
+        $(find "${MTK_SDK_DIR}/feed" feeds/mtk_openwrt_feed package/feeds/mtk_openwrt_feed tmp/info \
+            -type f 2>/dev/null | xargs grep -l 'kmod-nf-flow-netlink' 2>/dev/null || true); do
+        sed -i -E 's/[[:space:]]*\+?kmod-nf-flow-netlink//g' "$dep_file"
+    done
 }
 
 # Remove upstream feeds replaced by community clones below
