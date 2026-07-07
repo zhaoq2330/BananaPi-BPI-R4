@@ -55,6 +55,17 @@ apply_workspace_patch() {
     git apply --recount --ignore-space-change --ignore-whitespace "$patch_file"
 }
 
+fix_mtk_flowtable_dependency() {
+    # MTK flowtable feed may depend on kmod-nf-flow-netlink, which is not
+    # present in ImmortalWrt 25.12. Drop the stale dependency in both feed
+    # source and the installed package symlink/copy.
+    for flowtable_mk in \
+        feeds/mtk_openwrt_feed/flowtable/Makefile \
+        package/feeds/mtk_openwrt_feed/flowtable/Makefile; do
+        [ -f "$flowtable_mk" ] && sed -i 's/[[:space:]]*+kmod-nf-flow-netlink//g' "$flowtable_mk"
+    done
+}
+
 # Remove upstream feeds replaced by community clones below
 rm -rf feeds/luci/themes/luci-theme-argon
 rm -rf feeds/luci/applications/luci-app-argon-config
@@ -130,6 +141,7 @@ if grep -q 'mkdir $(PKG_BUILD_DIR)/bin' feeds/packages/net/vpnc/Makefile 2>/dev/
     sed -i '/mkdir $(PKG_BUILD_DIR)\/bin/s/mkdir /mkdir -p /' feeds/packages/net/vpnc/Makefile
 fi
 
+fix_mtk_flowtable_dependency
 ./scripts/feeds install -a
 
 # ── MTK SDK patches-feeds ─────────────────────────────────────────────
@@ -155,14 +167,7 @@ apply_mtk_patches_feeds() {
 }
 apply_mtk_patches_feeds
 
-# MTK flowtable feed may depend on kmod-nf-flow-netlink, which is not present
-# in ImmortalWrt 25.12.  Drop the stale dependency in both feed source and the
-# installed package symlink/copy to avoid metadata warnings and dependency aborts.
-for flowtable_mk in \
-    feeds/mtk_openwrt_feed/flowtable/Makefile \
-    package/feeds/mtk_openwrt_feed/flowtable/Makefile; do
-    [ -f "$flowtable_mk" ] && sed -i 's/[[:space:]]*+kmod-nf-flow-netlink//g' "$flowtable_mk"
-done
+fix_mtk_flowtable_dependency
 
 # Feed deps needed by community clones (pcre2 is in main tree since 25.12)
 ./scripts/feeds install c-ares udns
