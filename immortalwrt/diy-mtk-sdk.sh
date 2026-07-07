@@ -295,6 +295,77 @@ remove_broken_sfp_612_patches() {
     true
 }
 
+sync_local_sfp_612_patches() {
+    # Keep the final 6.12 SFP patch set deterministic.  MTK SDK overlays can
+    # carry older local experiments or CRLF-normalized copies from previous CI
+    # runs; always overwrite the SDK overlay and OpenWrt target patch directory
+    # from this repository's 25.12 SFP patch source.
+    local local_sfp_dir="${GITHUB_WORKSPACE}/patches/filogic/sfp/25.12"
+    local target_patch_dir="${OPENWRT_ROOT}/target/linux/mediatek/patches-6.12"
+    local mtk_patch_dir="$MTK_SDK_DIR/25.12/files/target/linux/mediatek/patches-6.12"
+    local copied=0 skipped=0
+
+    [ -d "$local_sfp_dir" ] || return 0
+
+    mkdir -p "$mtk_patch_dir"
+    [ -d "$target_patch_dir" ] && mkdir -p "$target_patch_dir"
+
+    for sfp_patch in "$local_sfp_dir"/*.patch; do
+        [ -f "$sfp_patch" ] || continue
+        local sfp_name; sfp_name=$(basename "$sfp_patch")
+
+        case "$sfp_name" in
+            *-6.6.patch|999-27[5-6][0-9]-*)
+                skipped=$((skipped + 1))
+                continue
+                ;;
+        esac
+
+        # Normalize line endings while copying. The kernel patch stage prints
+        # "Stripping trailing CRs" and can expose stale context failures when
+        # CRLF files slip into the overlay.
+        sed 's/\r$//' "$sfp_patch" > "$mtk_patch_dir/$sfp_name"
+        if [ -d "$target_patch_dir" ]; then
+            sed 's/\r$//' "$sfp_patch" > "$target_patch_dir/$sfp_name"
+        fi
+        copied=$((copied + 1))
+    done
+
+    log_info "Synced $copied local 6.12 SFP patches (skipped $skipped legacy/6.6 patches)"
+}
+
+verify_local_sfp_612_patches() {
+    local patch_dir="${OPENWRT_ROOT}/target/linux/mediatek/patches-6.12"
+    local struct_patch="$patch_dir/999-2778.1-sfp-reprobe-struct.patch"
+    local watchdog_patch="$patch_dir/999-2779-sfp-rtl8261be-1g-reprobe-watchdog.patch"
+
+    [ -d "$patch_dir" ] || return 0
+
+    if [ ! -f "$struct_patch" ]; then
+        log_error "Missing split SFP struct patch: $struct_patch"
+        return 1
+    fi
+
+    if [ ! -f "$watchdog_patch" ]; then
+        log_error "Missing SFP reprobe watchdog patch: $watchdog_patch"
+        return 1
+    fi
+
+    if grep -q "$(printf '\r')" "$struct_patch" "$watchdog_patch" 2>/dev/null; then
+        log_error "CRLF detected in synced 6.12 SFP patches"
+        return 1
+    fi
+
+    local watchdog_hunks
+    watchdog_hunks=$(grep -c '^@@' "$watchdog_patch" || true)
+    if [ "$watchdog_hunks" -ne 11 ]; then
+        log_error "Unexpected 2779 hunk count: $watchdog_hunks (expected 11 after struct split)"
+        return 1
+    fi
+
+    log_info "Verified local 6.12 SFP patch split: 2778.1 present, 2779 has 11 hunks, LF-only"
+}
+
 # ── 第五步：添加 MTK feed 源 ────────────────────────────────────────────
 add_mtk_feed() {
     local feeds_conf="${OPENWRT_ROOT}/feeds.conf.default"
@@ -527,34 +598,7 @@ main() {
     # 3. 注入本地 SFP/PCS 补丁到 MTK SDK 的 patches-6.12 目录
     #    参考 woziwrt: 在 autobuild/文件覆盖之前注入，确保补丁作为
     #    MTK SDK 基线的一部分被复制到 OpenWrt 树。
-    local local_sfp_dir="${GITHUB_WORKSPACE}/patches/filogic/sfp/25.12"
-    if [ -d "$local_sfp_dir" ]; then
-        local mtk_patch_dir="$MTK_SDK_DIR/25.12/files/target/linux/mediatek/patches-6.12"
-        mkdir -p "$mtk_patch_dir"
-        local sfp_copied=0 sfp_skipped_66=0
-        for sfp_patch in "$local_sfp_dir"/*.patch; do
-            [ -f "$sfp_patch" ] || continue
-            local sfp_name; sfp_name=$(basename "$sfp_patch")
-            case "$sfp_name" in
-                *-6.6.patch)
-                    sfp_skipped_66=$((sfp_skipped_66 + 1))
-                    ;;
-                999-27[5-6][0-9]-*)
-                    # Padavanonly-origin patches (2753–2769) target kernel
-                    # 6.6 and their hunks may not match 6.12.94 context
-                    # (e.g. 2764 realtek_main.c shifted 410+ lines).
-                    # BPI-R4's SFP needs are covered by woziwrt community
-                    # patches 2777–2780 written specifically for 6.12.
-                    sfp_skipped_66=$((sfp_skipped_66 + 1))
-                    ;;
-                *)
-                    cp -f "$sfp_patch" "$mtk_patch_dir/$sfp_name"
-                    sfp_copied=$((sfp_copied + 1))
-                    ;;
-            esac
-        done
-        log_info "Injected $sfp_copied SFP patches into MTK SDK (skipped $sfp_skipped_66 6.6-only / padavanonly-origin)"
-    fi
+    sync_local_sfp_612_patches
 
     # 4. 复制 MTK SDK 文件覆盖层 — 必须在打补丁之前！
     #    将 MTK SDK 的 25.12/files/（含步骤 3 注入的 SFP 补丁）复制到
@@ -562,6 +606,7 @@ main() {
     #    基线文件（如 filogic.mk, platform.sh, 02_network 等）。
     copy_files_safe "$MTK_SDK_DIR/25.12/files" "25.12/files"
     remove_broken_sfp_612_patches
+    sync_local_sfp_612_patches
 
     # 5. 复制 filogic 特定文件
     local filogic_files="$MTK_SDK_DIR/autobuild/unified/filogic/25.12/files"
@@ -569,6 +614,8 @@ main() {
         copy_files_safe "$filogic_files" "filogic/25.12/files"
     fi
     remove_broken_sfp_612_patches
+    sync_local_sfp_612_patches
+    verify_local_sfp_612_patches
 
     # 6. 创建时间戳标记
     touch "${OPENWRT_ROOT}/.timestamp"
