@@ -160,6 +160,44 @@ jobs:
         echo "date2=$(date "+%Y年%m月%d日")" >> $GITHUB_ENV
         echo "status=success" >> $GITHUB_OUTPUT
 
+    - name: Collect kernel patch failure context
+      if: failure() && steps.compile.outcome == 'failure'
+      run: |
+        mkdir -p "${{ github.workspace }}/kernel-patch-debug"
+        cd openwrt
+
+        {
+          echo "=== prepared linux trees ==="
+          find build_dir -path '*/linux-mediatek_filogic/linux-6.12.*' -type d 2>/dev/null | sort || true
+          echo ""
+          echo "=== mediatek patches-6.12 SFP/PCS patches ==="
+          find target/linux/mediatek/patches-6.12 -maxdepth 1 \
+            \( -name '999-277*.patch' -o -name '999-278*.patch' -o -name '*pcs*lynxi*.patch' \) \
+            -type f -print 2>/dev/null | sort || true
+        } > "${{ github.workspace }}/kernel-patch-debug/index.txt"
+
+        find build_dir -path '*/linux-mediatek_filogic/linux-6.12.*/drivers/net/pcs/pcs-mtk-lynxi.c' \
+          -type f -exec cp -v {} "${{ github.workspace }}/kernel-patch-debug/" \; 2>/dev/null || true
+        find build_dir -path '*/linux-mediatek_filogic/linux-6.12.*/drivers/net/pcs/pcs-mtk-lynxi.c.rej' \
+          -type f -exec cp -v {} "${{ github.workspace }}/kernel-patch-debug/" \; 2>/dev/null || true
+        find build_dir -path '*/linux-mediatek_filogic/linux-6.12.*/drivers/net/phy/sfp.c' \
+          -type f -exec cp -v {} "${{ github.workspace }}/kernel-patch-debug/" \; 2>/dev/null || true
+        find build_dir -path '*/linux-mediatek_filogic/linux-6.12.*/drivers/net/phy/sfp.c.rej' \
+          -type f -exec cp -v {} "${{ github.workspace }}/kernel-patch-debug/" \; 2>/dev/null || true
+
+        cp -v target/linux/mediatek/patches-6.12/999-2780-pcs-mtk-lynxi-hold-link-down-invalid-speed.patch \
+          "${{ github.workspace }}/kernel-patch-debug/" 2>/dev/null || true
+        cp -v target/linux/mediatek/patches-6.12/999-2779-sfp-rtl8261be-1g-reprobe-watchdog.patch \
+          "${{ github.workspace }}/kernel-patch-debug/" 2>/dev/null || true
+
+    - name: Upload kernel patch failure context
+      if: failure() && steps.compile.outcome == 'failure'
+      uses: actions/upload-artifact@v7.0.1
+      with:
+        name: kernel-patch-debug-${{ github.run_id }}
+        path: ${{ github.workspace }}/kernel-patch-debug
+        if-no-files-found: warn
+
     - name: Save ccache
       if: steps.compile.outputs.status == 'success' && steps.ccache-restore.outputs.cache-hit != 'true'
       uses: actions/cache/save@v5.0.5
