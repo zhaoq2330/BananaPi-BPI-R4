@@ -68,10 +68,10 @@ git clone --depth=1 https://github.com/jerrykuku/luci-theme-argon
 git clone --depth=1 https://github.com/jerrykuku/luci-app-argon-config
 # git clone --depth=1 https://github.com/Siriling/5G-Modem-Support
 # merge_package https://github.com/DHDAXCW/dhdaxcw-app dhdaxcw-app/luci-app-adguardhome
+merge_package https://github.com/kenzok8/jell jell/adguardhome
 merge_package https://github.com/MedyMa/luci-app luci-app/Luci-app/luci-app-fan
 merge_package https://github.com/MedyMa/luci-app luci-app/Luci-app/luci-app-sfp-status
 merge_package https://github.com/MedyMa/luci-app luci-app/Luci-app/luci-app-adguardhome
-merge_package https://github.com/kenzok8/jell jell/adguardhome
 merge_package https://github.com/MedyMa/luci-app luci-app/Luci-app/luci-app-modemband
 merge_package https://github.com/kenzok8/jell jell/wrtbwmon
 merge_package "-b main https://github.com/linkease/ddnsto-openwrt-package" ddnsto-openwrt-package/ddnsto
@@ -125,13 +125,13 @@ patch_makefile_dep \
 # LuCI patches for immortalwrt/openwrt-24.10 only. Keep these filenames
 # separate from the padavanonly mtwifi 6.6 patch set used by diy-part3.sh.
 [ -f feeds/luci/modules/luci-mod-status/htdocs/luci-static/resources/view/status/include/60_wifi.js ] && \
-    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/1000-openwrt-24.10-luci-status-overview-wifi7-mlo.patch"
+    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/24.10/1000-openwrt-24.10-luci-status-overview-wifi7-mlo.patch"
 
 [ -f feeds/luci/modules/luci-mod-network/htdocs/luci-static/resources/view/network/wireless.js ] && \
-    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/1004-openwrt-24.10-luci-wireless-combined.patch"
+    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/24.10/1004-openwrt-24.10-luci-wireless-combined.patch"
 
 [ -f feeds/luci/modules/luci-mod-status/htdocs/luci-static/resources/view/status/include/60_wifi.js ] && \
-    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/1002-openwrt-24.10-luci-status-overview-rate-mhz-hi.patch"    
+    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/24.10/1002-openwrt-24.10-luci-status-overview-rate-mhz-hi.patch"    
 
 [ -f feeds/luci/modules/luci-mod-network/htdocs/luci-static/resources/view/network/wireless.js ] && \
-    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/1003-openwrt-24.10-luci-wireless-mtk-mlo-ofdma-controls.patch"
+    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/24.10/1003-openwrt-24.10-luci-wireless-mtk-mlo-ofdma-controls.patch"
