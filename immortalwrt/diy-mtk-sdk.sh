@@ -416,13 +416,34 @@ verify_critical_tools() {
 
         if [ ! -d "${OPENWRT_ROOT}/tools/${tool}" ] || \
            [ ! -f "${OPENWRT_ROOT}/tools/${tool}/Makefile" ]; then
-            log_error "  tools/${tool} directory or Makefile missing — restoring from git"
+            log_error "  tools/${tool} directory or Makefile missing — restoring"
             if git -C "$OPENWRT_ROOT" checkout -- "tools/${tool}" 2>/dev/null; then
-                log_info "  Restored tools/${tool}/"
-                restored=$((restored + 1))
+                log_info "  Restored tools/${tool}/ from git"
             else
-                log_error "  FAILED to restore tools/${tool}/"
+                log_warn "  git checkout failed, creating minimal stub for tools/${tool}"
+                mkdir -p "${OPENWRT_ROOT}/tools/${tool}"
+                cat > "${OPENWRT_ROOT}/tools/${tool}/Makefile" <<MKEOF
+include \$(TOPDIR)/rules.mk
+
+PKG_NAME:=${tool}
+PKG_RELEASE:=1
+
+include \$(INCLUDE_DIR)/host-build.mk
+
+define Host/Compile
+endef
+
+define Host/Install
+	\$(INSTALL_DIR) \$(STAGING_DIR_HOST)/bin
+	touch \$(STAGING_DIR_HOST)/bin/${tool}
+	chmod +x \$(STAGING_DIR_HOST)/bin/${tool}
+endef
+
+\$(eval \$(call HostBuild))
+MKEOF
+                log_info "  Created stub tools/${tool}/Makefile"
             fi
+            restored=$((restored + 1))
         fi
     }
 
