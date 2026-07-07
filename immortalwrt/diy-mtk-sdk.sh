@@ -438,7 +438,7 @@ ensure_bpi_r4_mtk_packages() {
     fi
 
     FILOGIC_MK="$filogic_mk" perl -0pi -e '
-        my $pkg = " +kmod-mt798x-2p5g-phy";
+        my $pkg = " kmod-mt798x-2p5g-phy";
         s{
             (^define[ \t]+Device/[^\n]*bananapi[^\n]*bpi-r4[^\n]*\n)
             (.*?)
