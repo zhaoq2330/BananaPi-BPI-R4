@@ -163,6 +163,29 @@ is_unneeded_mtk_patch() {
     return 1
 }
 
+mtk_patch_skip_reason() {
+    local patch_file="$1"
+    local pname
+
+    pname=$(basename "$patch_file")
+
+    case "$pname" in
+        1133-image-mediatek-filogic-add-bananapi-bpi-r4-support.patch)
+            echo "BPI-R4 support already provided by ImmortalWrt/SDK overlay; avoid partial duplicate device block"
+            ;;
+        1146-image-mediatek-filogic-enable-kmod-mt798x-2p5g-phy.patch)
+            echo "replaced by targeted ensure_bpi_r4_mtk_packages post-step"
+            ;;
+        1142-image-mediatek-filogic-mt7987a-rfb-06-add-wifi-gen-dtso.patch|\
+        3602-mediatek-filogic-base-files-remove-dm-devices-before-upgrade.patch)
+            echo "MTK RFB/DM maintenance patch not needed for BPI-R4 target"
+            ;;
+        *)
+            echo "not needed for BPI-R4 target"
+            ;;
+    esac
+}
+
 # 扫描目录内所有 patch，生成冲突报告
 scan_patches() {
     local patch_dir="$1"
@@ -185,8 +208,9 @@ scan_patches() {
 
         if is_unneeded_mtk_patch "$pf" "$label"; then
             applied=$((applied + 1))
-            echo "  ${YELLOW}○${NC} $pname — not needed for BPI-R4 (skip)"
-            echo "    [SKIP-unneeded] $label: $pname" >> "$CONFLICT_LOG"
+            local skip_reason; skip_reason=$(mtk_patch_skip_reason "$pf")
+            echo "  ${YELLOW}○${NC} $pname — skip: $skip_reason"
+            echo "    [SKIP-unneeded] $label: $pname - $skip_reason" >> "$CONFLICT_LOG"
             continue
         fi
 
@@ -203,8 +227,8 @@ scan_patches() {
                 ;;
             conflict)
                 conflict=$((conflict + 1))
-                echo "  ${RED}✗${NC} $pname — CONFLICT"
-                echo "    [CONFLICT] $label: $pname" >> "$CONFLICT_LOG"
+                echo "  ${RED}✗${NC} $pname — pre-scan conflict"
+                echo "    [PRESCAN-CONFLICT] $label: $pname" >> "$CONFLICT_LOG"
                 # 显示冲突详情
                 patch -p1 --dry-run --force < "$pf" 2>&1 | head -5 | \
                     sed 's/^/    /' || true
@@ -243,9 +267,10 @@ apply_patches_safe() {
         fi
 
         if is_unneeded_mtk_patch "$pf" "$label"; then
-            log_warn "  Skip unneeded BPI-R4 patch: $pname"
+            local skip_reason; skip_reason=$(mtk_patch_skip_reason "$pf")
+            log_warn "  Skip BPI-R4-handled patch: $pname ($skip_reason)"
             skipped=$((skipped + 1))
-            echo "  [SKIP-unneeded] $label/$pname - not needed for BPI-R4 target" >> "$SKIPPED_LOG"
+            echo "  [SKIP-unneeded] $label/$pname - $skip_reason" >> "$SKIPPED_LOG"
             continue
         fi
 
@@ -781,7 +806,7 @@ MKEOF
     echo "  Skipped patches:  $SKIPPED_LOG"
     echo ""
     local prescan_conflict_count reject_count
-    prescan_conflict_count=$(grep -c '\[CONFLICT\]' "$CONFLICT_LOG" 2>/dev/null || true)
+    prescan_conflict_count=$(grep -c '\[PRESCAN-CONFLICT\]' "$CONFLICT_LOG" 2>/dev/null || true)
     reject_count=$(grep -c '\[REJECTS\]' "$SKIPPED_LOG" 2>/dev/null || true)
 
     if [ "$prescan_conflict_count" -gt 0 ]; then
