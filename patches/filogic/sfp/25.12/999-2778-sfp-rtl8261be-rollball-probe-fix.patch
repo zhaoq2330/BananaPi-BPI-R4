@@ -27,7 +27,7 @@ Signed-off-by: Petr Wozniak <petr.wozniak@gmail.com>
 ---
  drivers/net/mdio/mdio-i2c.c | 48 ++++++++++++++++++++++++++++++++++++--------
  drivers/net/phy/sfp.c       | 10 +++++++--
- 2 files changed, 48 insertions(+), 10 deletions(-)
+ 2 files changed, 33 insertions(+), 8 deletions(-)
 
 diff --git a/drivers/net/mdio/mdio-i2c.c b/drivers/net/mdio/mdio-i2c.c
 index ed20352a5..b88f63234 100644
@@ -121,29 +121,5 @@ index c3d4e5f6a..d4e5f6a7b 100644
 @@ -607,1 +607,2 @@ static const struct sfp_quirk sfp_quirks[] = {
 +	SFP_QUIRK_F("OEM", "SFP-10G-T-I", sfp_fixup_rollball_cc),
  	SFP_QUIRK_F("OEM", "SFP-10G-T", sfp_fixup_rollball_cc),
-@@ -2026,13 +2027,20 @@ static void sfp_sm_fault(struct sfp *sfp, unsigned int next_state, bool warn)
- 
- static int sfp_sm_add_mdio_bus(struct sfp *sfp)
- {
-+	int ret;
-+
- 	dev_info(sfp->dev, "probing phy device through the [%s] protocol\n",
- 		 mdio_i2c_proto_type(sfp->mdio_protocol));
- 
--	if (sfp->mdio_protocol != MDIO_I2C_NONE)
--		return sfp_i2c_mdiobus_create(sfp);
-+	if (sfp->mdio_protocol == MDIO_I2C_NONE)
-+		return 0;
- 
--	return 0;
-+	ret = sfp_i2c_mdiobus_create(sfp);
-+	if (ret == -ENODEV) {
-+		sfp->mdio_protocol = MDIO_I2C_NONE;
-+		return 0;
-+	}
-+	return ret;
- }
- 
- /* Probe a SFP for a PHY device if the module supports copper - the PHY
 -- 
 2.45.0
