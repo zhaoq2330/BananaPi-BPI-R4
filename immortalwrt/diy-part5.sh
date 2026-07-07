@@ -155,6 +155,15 @@ apply_mtk_patches_feeds() {
 }
 apply_mtk_patches_feeds
 
+# MTK flowtable feed may depend on kmod-nf-flow-netlink, which is not present
+# in ImmortalWrt 25.12.  Drop the stale dependency in both feed source and the
+# installed package symlink/copy to avoid metadata warnings and dependency aborts.
+for flowtable_mk in \
+    feeds/mtk_openwrt_feed/flowtable/Makefile \
+    package/feeds/mtk_openwrt_feed/flowtable/Makefile; do
+    [ -f "$flowtable_mk" ] && sed -i 's/[[:space:]]*+kmod-nf-flow-netlink//g' "$flowtable_mk"
+done
+
 # Feed deps needed by community clones (pcre2 is in main tree since 25.12)
 ./scripts/feeds install c-ares udns
 
