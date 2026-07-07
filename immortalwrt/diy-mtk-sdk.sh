@@ -470,8 +470,9 @@ MKEOF
         restore_tool_dir "$tool"
     done
 
-    [ "$restored" -gt 0 ] && log_warn "  Restored $restored critical tool(s) from git"
+    [ "$restored" -gt 0 ] && log_warn "  Restored or stubbed $restored critical tool item(s)"
     [ "$restored" -eq 0 ] && log_info "  All critical tools present"
+    true  # prevent set -e from seeing "restored>0 -> [ -eq 0 ] returns 1" as failure
 }
 
 # ── 主流程 ──────────────────────────────────────────────────────────────
