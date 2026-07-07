@@ -117,6 +117,38 @@ is_destructive_mtk_patch() {
     return 1
 }
 
+is_unneeded_mtk_patch() {
+    local patch_file="$1"
+    local label="$2"
+    local pname
+
+    [ "$label" = "patches-base" ] || return 1
+    pname=$(basename "$patch_file")
+
+    case "$pname" in
+        1132-image-mediatek-filogic-add-bananapi-bpi-r4-lite-support.patch)
+            # This build targets the full BPI-R4, not R4 Lite. Avoid partial
+            # image/upgrade script rejects from a board we do not emit.
+            return 0
+            ;;
+        1142-image-mediatek-filogic-mt7987a-rfb-03-add-spidev-overlays.patch|\
+        3000-fstools-dual-boot-add-support-to-build-libfstools-bootparam.patch|\
+        3600-mediatek-filogic-base-files-add-support-for-MediaTek-RBFs-upgrade.patch)
+            # MTK RFB/dual-boot support is not needed for BPI-R4 images and is
+            # prone to noisy rejects against ImmortalWrt's base-files/fstools.
+            return 0
+            ;;
+        3704-crypto-remove-safexcel-from-default-package.patch)
+            # Cosmetic default-package delta for MTK reference targets. If
+            # safexcel needs to be removed, do it in config/package defaults
+            # instead of partially applying a target Makefile patch.
+            return 0
+            ;;
+    esac
+
+    return 1
+}
+
 # 扫描目录内所有 patch，生成冲突报告
 scan_patches() {
     local patch_dir="$1"
@@ -134,6 +166,13 @@ scan_patches() {
             conflict=$((conflict + 1))
             echo "  ${YELLOW}!${NC} $pname - tools/Makefile patch (skip; fixed later)"
             echo "    [SKIP-TOOLS-MAKEFILE] $label: $pname" >> "$CONFLICT_LOG"
+            continue
+        fi
+
+        if is_unneeded_mtk_patch "$pf" "$label"; then
+            applied=$((applied + 1))
+            echo "  ${YELLOW}○${NC} $pname — not needed for BPI-R4 (skip)"
+            echo "    [SKIP-unneeded] $label: $pname" >> "$CONFLICT_LOG"
             continue
         fi
 
@@ -186,6 +225,13 @@ apply_patches_safe() {
             log_warn "  Skip tools/Makefile patch: $pname"
             skipped=$((skipped + 1))
             echo "  [SKIP-tools-makefile] $label/$pname - handled by verify_critical_tools and fdt stub" >> "$SKIPPED_LOG"
+            continue
+        fi
+
+        if is_unneeded_mtk_patch "$pf" "$label"; then
+            log_warn "  Skip unneeded BPI-R4 patch: $pname"
+            skipped=$((skipped + 1))
+            echo "  [SKIP-unneeded] $label/$pname - not needed for BPI-R4 target" >> "$SKIPPED_LOG"
             continue
         fi
 
