@@ -62,7 +62,7 @@ install_kernel_patch() {
 
 install_sfp_warm_reboot_patches() {
     local workspace_root="${GITHUB_WORKSPACE:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-    local patch_root="$workspace_root/patches/filogic/sfp"
+    local patch_root="$workspace_root/patches/filogic/sfp/6.6"
     local patch_name
 
     [ -d "$patch_root" ] || return 0
@@ -370,26 +370,26 @@ sed -i 's/ERROR_MESSAGE,WARNING: Applying padding in/MESSAGE,WARNING: Applying p
 # LuCI and mtwifi patches for padavanonly/immortalwrt-mt798x-6.6 only.
 # Do not reuse the openwrt-24.10 or master patch filenames in this chain.
 [ -f feeds/luci/modules/luci-mod-status/htdocs/luci-static/resources/view/status/include/60_wifi.js ] && \
-    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/1000-mtwifi-6.6-luci-status-overview-wifi7-mlo.patch"
+    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/mtwifi-6.6/1000-mtwifi-6.6-luci-status-overview-wifi7-mlo.patch"
 
 [ -f feeds/luci/modules/luci-mod-network/htdocs/luci-static/resources/view/network/wireless.js ] && \
-    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/1001-mtwifi-6.6-luci-network-wireless-station-hints.patch"
+    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/mtwifi-6.6/1001-mtwifi-6.6-luci-network-wireless-station-hints.patch"
 
 [ -f feeds/luci/modules/luci-mod-network/htdocs/luci-static/resources/view/network/wireless.js ] && \
-    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/999-mtwifi-6.6-luci-wireless-mtk-mode-matrix.patch"
+    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/mtwifi-6.6/999-mtwifi-6.6-luci-wireless-mtk-mode-matrix.patch"
 
 [ -d package/system/rpcd ] && {
     mkdir -p package/system/rpcd/patches
     install -m 0644 \
-        "$GITHUB_WORKSPACE/patches/filogic/997-mtwifi-6.6-rpcd-iwinfo-export-mhz-hi.patch" \
+        "$GITHUB_WORKSPACE/patches/filogic/mtwifi-6.6/997-mtwifi-6.6-rpcd-iwinfo-export-mhz-hi.patch" \
         package/system/rpcd/patches/997-iwinfo-export-eht-dcm.patch
 }
 
 [ -f package/network/utils/iwinfo/src/iwinfo_mtk.c ] && \
-    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/998-mtwifi-6.6-iwinfo-mtk-fix-6ghz-reporting.patch"
+    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/mtwifi-6.6/998-mtwifi-6.6-iwinfo-mtk-fix-6ghz-reporting.patch"
 
 [ -f package/mtk/applications/luci-app-mtwifi-cfg/root/usr/share/luci-app-mtwifi-cfg/wireless-mtk.js ] && \
-    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/1005-mtwifi-6.6-luci-wireless-mtk-station-and-rate-fixes.patch"
+    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/mtwifi-6.6/1005-mtwifi-6.6-luci-wireless-mtk-station-and-rate-fixes.patch"
 
 [ -f feeds/luci/modules/luci-mod-status/htdocs/luci-static/resources/view/status/include/60_wifi.js ] && \
-    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/1002-mtwifi-6.6-luci-status-overview-rate-mhz-hi.patch"
+    apply_workspace_patch "$GITHUB_WORKSPACE/patches/filogic/mtwifi-6.6/1002-mtwifi-6.6-luci-status-overview-rate-mhz-hi.patch"
