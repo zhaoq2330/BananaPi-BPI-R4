@@ -527,7 +527,7 @@ main() {
     # 3. 注入本地 SFP/PCS 补丁到 MTK SDK 的 patches-6.12 目录
     #    参考 woziwrt: 在 autobuild/文件覆盖之前注入，确保补丁作为
     #    MTK SDK 基线的一部分被复制到 OpenWrt 树。
-    local local_sfp_dir="${GITHUB_WORKSPACE}/patches/filogic/sfp"
+    local local_sfp_dir="${GITHUB_WORKSPACE}/patches/filogic/sfp/25.12"
     if [ -d "$local_sfp_dir" ]; then
         local mtk_patch_dir="$MTK_SDK_DIR/25.12/files/target/linux/mediatek/patches-6.12"
         mkdir -p "$mtk_patch_dir"
