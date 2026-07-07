@@ -380,6 +380,28 @@ remove_broken_sfp_612_patches() {
     true
 }
 
+remove_unstable_pcs_lynxi_612_patch() {
+    # 999-2780 targets pcs-mtk-lynxi.c, which MTK SDK rewrites heavily through
+    # its own 999-pcs-* patch chain.  Without the final prepared kernel source
+    # context this guard cannot be expressed as a stable plaintext kernel patch,
+    # so keep it out of patches-6.12 rather than failing target/linux prepare.
+    local rel_patch="target/linux/mediatek/patches-6.12/999-2780-pcs-mtk-lynxi-hold-link-down-invalid-speed.patch"
+    local removed=0
+
+    for patch_file in \
+        "$MTK_SDK_DIR/25.12/files/$rel_patch" \
+        "$MTK_SDK_DIR/autobuild/unified/filogic/25.12/files/$rel_patch" \
+        "$OPENWRT_ROOT/$rel_patch"; do
+        if [ -f "$patch_file" ]; then
+            rm -f "$patch_file"
+            removed=$((removed + 1))
+        fi
+    done
+
+    [ "$removed" -gt 0 ] && log_warn "Removed unstable 6.12 PCS Lynxi patch 999-2780 from $removed location(s)"
+    true
+}
+
 sync_local_sfp_612_patches() {
     # Keep the final 6.12 SFP patch set deterministic.  MTK SDK overlays can
     # carry older local experiments or CRLF-normalized copies from previous CI
