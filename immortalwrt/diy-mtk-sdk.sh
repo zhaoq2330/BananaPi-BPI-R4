@@ -539,12 +539,13 @@ main() {
                 *-6.6.patch)
                     sfp_skipped_66=$((sfp_skipped_66 + 1))
                     ;;
-                999-2753-net-phy-sfp-support-additional-RollBall-modules.patch)
-                    # This old quirk-table patch no longer matches 6.12.94
-                    # and only adds ETU/TNBY/JESS-LINK modules.  BPI-R4's
-                    # OEM SFP-10G-T path is covered by the later RTL8261BE
-                    # probe fix, so skip 2753 on 25.12/6.12 to avoid blocking
-                    # kernel patch preparation.
+                999-27[5-6][0-9]-*)
+                    # Padavanonly-origin patches (2753–2769) target kernel
+                    # 6.6 and their hunks may not match 6.12.94 context
+                    # (e.g. 2764 realtek_main.c shifted 410+ lines).
+                    # BPI-R4's SFP needs are covered by woziwrt community
+                    # patches 2777–2780 written specifically for 6.12.
+                    sfp_skipped_66=$((sfp_skipped_66 + 1))
                     ;;
                 *)
                     cp -f "$sfp_patch" "$mtk_patch_dir/$sfp_name"
@@ -552,7 +553,7 @@ main() {
                     ;;
             esac
         done
-        log_info "Injected $sfp_copied SFP patches into MTK SDK (skipped $sfp_skipped_66 6.6-only)"
+        log_info "Injected $sfp_copied SFP patches into MTK SDK (skipped $sfp_skipped_66 6.6-only / padavanonly-origin)"
     fi
 
     # 4. 复制 MTK SDK 文件覆盖层 — 必须在打补丁之前！
