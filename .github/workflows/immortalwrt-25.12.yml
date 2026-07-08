@@ -185,7 +185,7 @@ jobs:
         find build_dir -path '*/linux-mediatek_filogic/linux-6.12.*/drivers/net/phy/sfp.c.rej' \
           -type f -exec cp -v {} "${{ github.workspace }}/kernel-patch-debug/" \; 2>/dev/null || true
 
-        cp -v target/linux/mediatek/patches-6.12/999-2780-pcs-mtk-lynxi-hold-link-down-invalid-speed.patch \
+        cp -v target/linux/mediatek/patches-6.12/999-pcs-99-mtk-lynxi-hold-link-down-invalid-speed.patch \
           "${{ github.workspace }}/kernel-patch-debug/" 2>/dev/null || true
         cp -v target/linux/mediatek/patches-6.12/999-2779-sfp-rtl8261be-1g-reprobe-watchdog.patch \
           "${{ github.workspace }}/kernel-patch-debug/" 2>/dev/null || true
