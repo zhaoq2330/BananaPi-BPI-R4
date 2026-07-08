@@ -534,6 +534,7 @@ MT753X_GSW
 "
     local scan_symbols_file="${OPENWRT_ROOT}/tmp/mtk-sdk-kconfig-symbols.txt"
     local auto_unset_file="${OPENWRT_ROOT}/tmp/mtk-sdk-kconfig-auto-unset.txt"
+    local review_file="${OPENWRT_ROOT}/tmp/mtk-sdk-kconfig-review.txt"
 
     ensure_unset_symbol() {
         local config_file="$1"
@@ -580,6 +581,7 @@ MT753X_GSW
         mkdir -p "${OPENWRT_ROOT}/tmp"
         : > "$scan_symbols_file"
         : > "$auto_unset_file"
+        : > "$review_file"
 
         find \
             "${OPENWRT_ROOT}/target/linux/mediatek" \
@@ -597,8 +599,11 @@ MT753X_GSW
         while IFS= read -r symbol; do
             [ -n "$symbol" ] || continue
             is_symbol_configured "$symbol" && continue
-            should_auto_unset_kconfig_symbol "$symbol" || continue
-            printf '%s\n' "$symbol" >> "$auto_unset_file"
+            if should_auto_unset_kconfig_symbol "$symbol"; then
+                printf '%s\n' "$symbol" >> "$auto_unset_file"
+            else
+                printf '%s\n' "$symbol" >> "$review_file"
+            fi
         done < "$scan_symbols_file"
 
         if [ -s "$auto_unset_file" ]; then
@@ -608,6 +613,15 @@ $(cat "$auto_unset_file")
 "
         else
             log_info "No extra non-BPI-R4 MTK SDK Kconfig symbols detected"
+        fi
+
+        if [ -s "$review_file" ]; then
+            local review_count
+            review_count=$(wc -l < "$review_file" | tr -d ' ')
+            log_warn "Unconfigured MTK SDK Kconfig symbols needing review ($review_count total; first 80): $(head -n 80 "$review_file" | tr '\n' ' ')"
+            log_warn "Full review list: $review_file"
+        else
+            log_info "No unconfigured MTK SDK Kconfig symbols need manual review"
         fi
     }
 
