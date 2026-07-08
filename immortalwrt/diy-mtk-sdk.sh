@@ -380,6 +380,28 @@ remove_broken_sfp_612_patches() {
     true
 }
 
+remove_stale_pcs_lynxi_612_patches() {
+    # 999-2780 sorted before MTK SDK's own 999-pcs-01..07 chain and could
+    # modify pcs-mtk-lynxi.c too early.  The fixed guard is renamed to
+    # 999-pcs-99-* so it applies after the SDK PCS chain; remove stale copies
+    # left by older CI workspaces or SDK overlays.
+    local rel_patch="target/linux/mediatek/patches-6.12/999-2780-pcs-mtk-lynxi-hold-link-down-invalid-speed.patch"
+    local removed=0
+
+    for patch_file in \
+        "$MTK_SDK_DIR/25.12/files/$rel_patch" \
+        "$MTK_SDK_DIR/autobuild/unified/filogic/25.12/files/$rel_patch" \
+        "$OPENWRT_ROOT/$rel_patch"; do
+        if [ -f "$patch_file" ]; then
+            rm -f "$patch_file"
+            removed=$((removed + 1))
+        fi
+    done
+
+    [ "$removed" -gt 0 ] && log_warn "Removed stale early PCS Lynxi patch 999-2780 from $removed location(s)"
+    true
+}
+
 sync_local_sfp_612_patches() {
     # Keep the final 6.12 SFP patch set deterministic.  MTK SDK overlays can
     # carry older local experiments or CRLF-normalized copies from previous CI
@@ -717,6 +739,7 @@ main() {
 
     # 2.5. 移除已知不兼容 linux 6.12.94 的旧 SFP quirk 补丁
     remove_broken_sfp_612_patches
+    remove_stale_pcs_lynxi_612_patches
 
     # 3. 注入本地 SFP/PCS 补丁到 MTK SDK 的 patches-6.12 目录
     #    参考 woziwrt: 在 autobuild/文件覆盖之前注入，确保补丁作为
@@ -729,6 +752,7 @@ main() {
     #    基线文件（如 filogic.mk, platform.sh, 02_network 等）。
     copy_files_safe "$MTK_SDK_DIR/25.12/files" "25.12/files"
     remove_broken_sfp_612_patches
+    remove_stale_pcs_lynxi_612_patches
     sync_local_sfp_612_patches
 
     # 5. 复制 filogic 特定文件
@@ -737,6 +761,7 @@ main() {
         copy_files_safe "$filogic_files" "filogic/25.12/files"
     fi
     remove_broken_sfp_612_patches
+    remove_stale_pcs_lynxi_612_patches
     sync_local_sfp_612_patches
     verify_local_sfp_612_patches
 
