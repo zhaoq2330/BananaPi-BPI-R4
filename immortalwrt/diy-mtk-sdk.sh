@@ -561,13 +561,17 @@ MT753X_GSW
             # BPI-R4 core path: keep these controlled by defconfig/packages.
             SFP|MDIO_I2C|FIXED_PHY|PHYLINK|PHYLIB|SWPHY|NET_DSA|NET_DSA_MT7530*|\
             PCS_MTK_*|PHY_MTK_*|MTK_NETSYS*|MTK_HNAT*|MTK_PPE*|MTK_WED*|\
-            MT798*|MT799*|MT76*|NVMEM_MTK_*|PINCTRL_MTK_*|PWM_MTK_*|\
+            MT798*|MT799*|MT76*|MEDIATEK_2P5GE_PHY|NVMEM_MTK_*|PINCTRL_MTK_*|PWM_MTK_*|\
             PCIE_MEDIATEK*|ARCH_MEDIATEK|ARM64)
                 return 1
                 ;;
             # MTK SDK carries these for other RFBs/legacy switch stacks.
             NET_DSA_MXL862|NET_DSA_TAG_MXL862*|MT753X_GSW|SWCONFIG|\
+            AIROHA_AN8801_PHY|AIR_AN8811HB_PHY*|AN8855_GSW|\
+            MIKROTIK_*|MTD_SPLIT_CFE_BOOTFS|MTK_EMIMPU|\
+            USB_XHCI_MTK_DEBUGFS|ZTS8032|ZTS8232|\
             ADM6996_PHY|AR8216_PHY|IP17XX_PHY|PSB6970_PHY|RTL8306_PHY|RTL8366_SMI|\
+            SWCONFIG_B53_*|\
             NET_DSA_BCM_*|NET_DSA_LOOP|NET_DSA_LANTIQ_*|NET_DSA_MV*|\
             NET_DSA_MSCC_*|NET_DSA_AR9331|NET_DSA_QCA8K*)
                 return 0
