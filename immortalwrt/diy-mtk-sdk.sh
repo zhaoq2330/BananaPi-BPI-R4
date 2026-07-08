@@ -534,6 +534,8 @@ MT753X_GSW
 "
     local kconfig_builtin_symbols="
 MEDIATEK_2P5GE_PHY
+NF_CONNTRACK
+NF_FLOW_TABLE
 "
     local scan_symbols_file="${OPENWRT_ROOT}/tmp/mtk-sdk-kconfig-symbols.txt"
     local auto_unset_file="${OPENWRT_ROOT}/tmp/mtk-sdk-kconfig-auto-unset.txt"
