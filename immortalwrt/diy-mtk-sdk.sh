@@ -532,6 +532,9 @@ NET_DSA_TAG_MXL862
 NET_DSA_TAG_MXL862_8021Q
 MT753X_GSW
 "
+    local kconfig_builtin_symbols="
+MEDIATEK_2P5GE_PHY
+"
     local scan_symbols_file="${OPENWRT_ROOT}/tmp/mtk-sdk-kconfig-symbols.txt"
     local auto_unset_file="${OPENWRT_ROOT}/tmp/mtk-sdk-kconfig-auto-unset.txt"
     local review_file="${OPENWRT_ROOT}/tmp/mtk-sdk-kconfig-review.txt"
@@ -543,6 +546,15 @@ MT753X_GSW
         [ -f "$config_file" ] || return 0
         sed -i "/^CONFIG_${symbol}=/d; /^# CONFIG_${symbol} is not set$/d" "$config_file"
         printf '# CONFIG_%s is not set\n' "$symbol" >> "$config_file"
+    }
+
+    ensure_builtin_symbol() {
+        local config_file="$1"
+        local symbol="$2"
+
+        [ -f "$config_file" ] || return 0
+        sed -i "/^CONFIG_${symbol}=/d; /^# CONFIG_${symbol} is not set$/d" "$config_file"
+        printf 'CONFIG_%s=y\n' "$symbol" >> "$config_file"
     }
 
     is_symbol_configured() {
@@ -629,6 +641,10 @@ $(cat "$auto_unset_file")
         fi
     }
 
+    for symbol in $kconfig_builtin_symbols; do
+        ensure_builtin_symbol "$kernel_config" "$symbol"
+    done
+
     scan_mtk_sdk_kconfig_symbols
 
     mkdir -p "$(dirname "$allconfig")"
@@ -637,12 +653,17 @@ $(cat "$auto_unset_file")
 # to 'n' so kernel syncconfig never blocks in CI.
 KCONFEOF
 
+    for symbol in $kconfig_builtin_symbols; do
+        ensure_builtin_symbol "$allconfig" "$symbol"
+        ensure_builtin_symbol "$kernel_config" "$symbol"
+    done
+
     for symbol in $kconfig_unset_symbols; do
         ensure_unset_symbol "$allconfig" "$symbol"
         ensure_unset_symbol "$kernel_config" "$symbol"
     done
 
-    log_info "Created kconfig-allnoconfig and ensured non-BPI-R4 MTK SDK Kconfig symbols are unset"
+    log_info "Created kconfig-allnoconfig and ensured MTK SDK Kconfig symbols are pinned"
 
     inject_kconfig_allconfig() {
         local target_mk="$1"
