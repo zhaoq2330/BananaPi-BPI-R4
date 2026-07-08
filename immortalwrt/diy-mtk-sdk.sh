@@ -534,6 +534,7 @@ MT753X_GSW
 "
     local kconfig_builtin_symbols="
 MEDIATEK_2P5GE_PHY
+NETFILTER
 NF_CONNTRACK
 NF_FLOW_TABLE
 "
