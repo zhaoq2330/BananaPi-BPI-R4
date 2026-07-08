@@ -359,24 +359,29 @@ copy_files_safe() {
 }
 
 remove_broken_sfp_612_patches() {
-    # 999-2753 no longer matches linux 6.12.94's sfp.c quirk table.  It only
-    # adds extra ETU/TNBY/JESS-LINK RollBall quirks, while BPI-R4's OEM
-    # SFP-10G-T path is covered by the later RTL8261BE probe fix.  Remove it
-    # from both MTK SDK overlay source and the OpenWrt target patch directory.
-    local rel_patch="target/linux/mediatek/patches-6.12/999-2753-net-phy-sfp-support-additional-RollBall-modules.patch"
+    # Remove MTK SDK SFP quirk-table patches that no longer match
+    # linux 6.12.94 after our own sfp.c modifications (2777/2778).
+    # These add extra ETU/TNBY/JESS-LINK RollBall quirks, while
+    # BPI-R4's OEM SFP-10G-T path is covered by the RTL8261BE probe fix.
+    local rel_patches=(
+        "target/linux/mediatek/patches-6.12/999-2753-net-phy-sfp-support-additional-RollBall-modules.patch"
+        "target/linux/mediatek/patches-6.12/999-sfp-01-add-additional-RollBall-modules.patch"
+    )
     local removed=0
 
-    for patch_file in \
-        "$MTK_SDK_DIR/25.12/files/$rel_patch" \
-        "$MTK_SDK_DIR/autobuild/unified/filogic/25.12/files/$rel_patch" \
-        "$OPENWRT_ROOT/$rel_patch"; do
-        if [ -f "$patch_file" ]; then
-            rm -f "$patch_file"
-            removed=$((removed + 1))
-        fi
+    for rel_patch in "${rel_patches[@]}"; do
+        for patch_file in \
+            "$MTK_SDK_DIR/25.12/files/$rel_patch" \
+            "$MTK_SDK_DIR/autobuild/unified/filogic/25.12/files/$rel_patch" \
+            "$OPENWRT_ROOT/$rel_patch"; do
+            if [ -f "$patch_file" ]; then
+                rm -f "$patch_file"
+                removed=$((removed + 1))
+            fi
+        done
     done
 
-    [ "$removed" -gt 0 ] && log_warn "Removed broken 6.12 SFP patch 999-2753 from $removed location(s)"
+    [ "$removed" -gt 0 ] && log_warn "Removed $removed broken/broken-order 6.12 SFP patch instance(s)"
     true
 }
 
