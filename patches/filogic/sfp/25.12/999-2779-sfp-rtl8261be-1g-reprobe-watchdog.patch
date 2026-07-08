@@ -75,7 +75,7 @@ index d4e5f6a7b..e5f6a7b8c 100644
  }
  
  static void sfp_sm_link_down(struct sfp *sfp)
-@@ -2542,6 +2555,12 @@ static int sfp_sm_mod_probe(struct sfp *sfp, bool report)
+@@ -2542,6 +2555,13 @@ static int sfp_sm_mod_probe(struct sfp *sfp, bool report)
  	if (sfp->quirk && sfp->quirk->fixup)
  		sfp->quirk->fixup(sfp);
  
