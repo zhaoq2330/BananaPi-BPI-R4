@@ -75,9 +75,10 @@ index d4e5f6a7b..e5f6a7b8c 100644
  }
  
  static void sfp_sm_link_down(struct sfp *sfp)
-@@ -2426,4 +2443,11 @@ static int sfp_sm_mod_probe(struct sfp *sfp, bool report)
+@@ -2542,6 +2555,12 @@ static int sfp_sm_mod_probe(struct sfp *sfp, bool report)
  	if (sfp->quirk && sfp->quirk->fixup)
  		sfp->quirk->fixup(sfp);
+ 
 +	/* Enable reprobe watchdog only for copper SFP+ modules (e.g.
 +	 * RTL8261BE-based) that may change advertised speeds after
 +	 * link partner negotiation. GPON/fiber are unaffected.
@@ -85,6 +86,7 @@ index d4e5f6a7b..e5f6a7b8c 100644
 +	sfp->sm_reprobe_enabled =
 +		sfp->id.base.connector == SFF8024_CONNECTOR_RJ45;
 +
+ 	sfp->state_hw_mask &= ~sfp->state_ignore_mask;
  	mutex_unlock(&sfp->st_mutex);
  
 @@ -2598,6 +2622,8 @@ static void sfp_sm_module(struct sfp *sfp, unsigned int event)
