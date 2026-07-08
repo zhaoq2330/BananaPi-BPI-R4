@@ -516,6 +516,29 @@ ensure_bpi_r4_mtk_packages() {
     fi
 }
 
+ensure_kernel_config_fixes() {
+    # MTK SDK files overlay may introduce kernel-side drivers (e.g. MxL862xx
+    # DSA tag) whose Kconfig symbols are not referenced by the defconfig.
+    # Kernel syncconfig then blocks on interactive input.  Set them to 'n'
+    # (disabled) unless BPI-R4 explicitly needs them.
+    local kernel_config="${OPENWRT_ROOT}/target/linux/mediatek/filogic/config-6.12"
+    local appended=0
+
+    [ -f "$kernel_config" ] || return 0
+
+    set_kernel_config_unset() {
+        local symbol="$1"
+
+        sed -i "/^CONFIG_${symbol}=/d;/^# CONFIG_${symbol} is not set$/d" "$kernel_config"
+        echo "# CONFIG_${symbol} is not set" >> "$kernel_config"
+        appended=$((appended + 1))
+    }
+
+    set_kernel_config_unset "NET_DSA_TAG_MXL862"
+
+    [ "$appended" -gt 0 ] && log_info "Patched kernel config: $appended stale/undefined Kconfig symbols set to n"
+}
+
 # ── 第五步：添加 MTK feed 源 ────────────────────────────────────────────
 add_mtk_feed() {
     local feeds_conf="${OPENWRT_ROOT}/feeds.conf.default"
@@ -781,6 +804,7 @@ main() {
 
     # 8.2. 用目标板后处理替代会产生 rejects 的宽泛 MTK RFB 补丁
     ensure_bpi_r4_mtk_packages
+    ensure_kernel_config_fixes
 
     # 8.5. 验证关键构建工具完整性
     #       MTK SDK 的文件覆盖和补丁可能破坏标准工具链。
