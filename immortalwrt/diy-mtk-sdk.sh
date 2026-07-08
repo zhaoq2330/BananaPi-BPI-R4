@@ -535,6 +535,7 @@ ensure_kernel_config_fixes() {
     }
 
     set_kernel_config_unset "NET_DSA_TAG_MXL862"
+    set_kernel_config_unset "NET_DSA_TAG_MXL862_8021Q"
 
     [ "$appended" -gt 0 ] && log_info "Patched kernel config: $appended stale/undefined Kconfig symbols set to n"
 }
