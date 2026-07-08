@@ -530,7 +530,10 @@ ensure_kernel_config_fixes() {
 NET_DSA_MXL862
 NET_DSA_TAG_MXL862
 NET_DSA_TAG_MXL862_8021Q
+MT753X_GSW
 "
+    local scan_symbols_file="${OPENWRT_ROOT}/tmp/mtk-sdk-kconfig-symbols.txt"
+    local auto_unset_file="${OPENWRT_ROOT}/tmp/mtk-sdk-kconfig-auto-unset.txt"
 
     ensure_unset_symbol() {
         local config_file="$1"
@@ -540,6 +543,75 @@ NET_DSA_TAG_MXL862_8021Q
         sed -i "/^CONFIG_${symbol}=/d; /^# CONFIG_${symbol} is not set$/d" "$config_file"
         printf '# CONFIG_%s is not set\n' "$symbol" >> "$config_file"
     }
+
+    is_symbol_configured() {
+        local symbol="$1"
+
+        grep -qsE "^(CONFIG_${symbol}=|# CONFIG_${symbol} is not set$)" \
+            "${OPENWRT_ROOT}/target/linux/generic/config-6.12" \
+            "${OPENWRT_ROOT}/target/linux/mediatek/filogic/config-6.12" \
+            "${OPENWRT_ROOT}/.config" 2>/dev/null
+    }
+
+    should_auto_unset_kconfig_symbol() {
+        local symbol="$1"
+
+        case "$symbol" in
+            # BPI-R4 core path: keep these controlled by defconfig/packages.
+            SFP|MDIO_I2C|FIXED_PHY|PHYLINK|PHYLIB|SWPHY|NET_DSA|NET_DSA_MT7530*|\
+            PCS_MTK_*|PHY_MTK_*|MTK_NETSYS*|MTK_HNAT*|MTK_PPE*|MTK_WED*|\
+            MT798*|MT799*|MT76*|NVMEM_MTK_*|PINCTRL_MTK_*|PWM_MTK_*|\
+            PCIE_MEDIATEK*|ARCH_MEDIATEK|ARM64)
+                return 1
+                ;;
+            # MTK SDK carries these for other RFBs/legacy switch stacks.
+            NET_DSA_MXL862|NET_DSA_TAG_MXL862*|MT753X_GSW|SWCONFIG|\
+            ADM6996_PHY|AR8216_PHY|IP17XX_PHY|PSB6970_PHY|RTL8306_PHY|RTL8366_SMI|\
+            NET_DSA_BCM_*|NET_DSA_LOOP|NET_DSA_LANTIQ_*|NET_DSA_MV*|\
+            NET_DSA_MSCC_*|NET_DSA_AR9331|NET_DSA_QCA8K*)
+                return 0
+                ;;
+        esac
+
+        return 1
+    }
+
+    scan_mtk_sdk_kconfig_symbols() {
+        mkdir -p "${OPENWRT_ROOT}/tmp"
+        : > "$scan_symbols_file"
+        : > "$auto_unset_file"
+
+        find \
+            "${OPENWRT_ROOT}/target/linux/mediatek" \
+            "${OPENWRT_ROOT}/target/linux/generic" \
+            -type f \( -name 'Kconfig' -o -name 'Kconfig.*' \) \
+            -exec sed -n 's/^[[:space:]]*config[[:space:]]\{1,\}\([A-Za-z0-9_]\{1,\}\).*/\1/p' {} \; \
+            >> "$scan_symbols_file" 2>/dev/null || true
+
+        find "${OPENWRT_ROOT}/target/linux/mediatek/patches-6.12" -type f -name '*.patch' \
+            -exec sed -n 's/^+[[:space:]]*config[[:space:]]\{1,\}\([A-Za-z0-9_]\{1,\}\).*/\1/p' {} \; \
+            >> "$scan_symbols_file" 2>/dev/null || true
+
+        sort -u "$scan_symbols_file" -o "$scan_symbols_file"
+
+        while IFS= read -r symbol; do
+            [ -n "$symbol" ] || continue
+            is_symbol_configured "$symbol" && continue
+            should_auto_unset_kconfig_symbol "$symbol" || continue
+            printf '%s\n' "$symbol" >> "$auto_unset_file"
+        done < "$scan_symbols_file"
+
+        if [ -s "$auto_unset_file" ]; then
+            log_warn "Auto-unsetting non-BPI-R4 MTK SDK Kconfig symbols: $(tr '\n' ' ' < "$auto_unset_file")"
+            kconfig_unset_symbols="$kconfig_unset_symbols
+$(cat "$auto_unset_file")
+"
+        else
+            log_info "No extra non-BPI-R4 MTK SDK Kconfig symbols detected"
+        fi
+    }
+
+    scan_mtk_sdk_kconfig_symbols
 
     mkdir -p "$(dirname "$allconfig")"
     cat > "$allconfig" <<KCONFEOF
@@ -552,7 +624,7 @@ KCONFEOF
         ensure_unset_symbol "$kernel_config" "$symbol"
     done
 
-    log_info "Created kconfig-allnoconfig and ensured MTK SDK DSA symbols are unset"
+    log_info "Created kconfig-allnoconfig and ensured non-BPI-R4 MTK SDK Kconfig symbols are unset"
 
     inject_kconfig_allconfig() {
         local target_mk="$1"
