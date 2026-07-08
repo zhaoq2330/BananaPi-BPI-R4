@@ -523,8 +523,8 @@ ensure_kernel_config_fixes() {
     #
     # Use KCONFIG_ALLCONFIG to auto-set unknown symbols to 'n' instead of
     # prompting.  This is the kernel's built-in mechanism for non-interactive
-    # config resolution.
-    local kernel_config="${OPENWRT_ROOT}/target/linux/mediatek/filogic/config-6.12"
+    # config resolution.  The allnoconfig file takes precedence over
+    # config-6.12, so writing the target config is unnecessary.
     local allconfig="${OPENWRT_ROOT}/target/linux/mediatek/filogic/kconfig-allnoconfig"
 
     mkdir -p "$(dirname "$allconfig")"
@@ -535,19 +535,7 @@ ensure_kernel_config_fixes() {
 # CONFIG_NET_DSA_TAG_MXL862_8021Q is not set
 KCONFEOF
 
-    log_info "Created kconfig-allnoconfig for $allconfig"
-
-    # Keep the target kernel config explicit as well.  OpenWrt target configs
-    # use "# CONFIG_* is not set"; remove any stale y/m value first.
-    if [ -f "$kernel_config" ]; then
-        sed -i '/^CONFIG_NET_DSA_TAG_MXL862=/d;/^# CONFIG_NET_DSA_TAG_MXL862 is not set$/d' "$kernel_config"
-        sed -i '/^CONFIG_NET_DSA_TAG_MXL862_8021Q=/d;/^# CONFIG_NET_DSA_TAG_MXL862_8021Q is not set$/d' "$kernel_config"
-        {
-            echo "# CONFIG_NET_DSA_TAG_MXL862 is not set"
-            echo "# CONFIG_NET_DSA_TAG_MXL862_8021Q is not set"
-        } >> "$kernel_config"
-        log_info "Patched kernel config for MxL862xx DSA tag symbols"
-    fi
+    log_info "Created kconfig-allnoconfig"
 
     inject_kconfig_allconfig() {
         local target_mk="$1"
