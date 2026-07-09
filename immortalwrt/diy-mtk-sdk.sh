@@ -498,7 +498,11 @@ remove_mtk_fstools_overlay_patches() {
         fi
     done
 
-    [ "$removed" -eq 0 ] && log_info "No MTK SDK fstools overlay patches found"
+    if [ "$removed" -eq 0 ]; then
+        log_info "No MTK SDK fstools overlay patches found"
+    fi
+
+    return 0
 }
 
 ensure_bpi_r4_mtk_packages() {
