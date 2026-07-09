@@ -505,6 +505,42 @@ remove_mtk_fstools_overlay_patches() {
     return 0
 }
 
+remove_mtk_listed_conflicts() {
+    # Read MTK's own remove_list-mtwifi.txt as a supplementary conflict source.
+    # MTK maintains this list for known-vanilla-OpenWrt conflicts; we apply it
+    # on top of our own local rules to catch MTK-acknowledged overlaps.
+    # This is additive—it does NOT replace clean_conflicting_immortalwrt_patches().
+    local remove_list="${MTK_SDK_DIR}/25.12/remove_list-mtwifi.txt"
+    local removed=0
+
+    [ -f "$remove_list" ] || {
+        log_info "No MTK remove_list-mtwifi.txt found, skipping"
+        return 0
+    }
+
+    log_step "Applying MTK remove_list-mtwifi.txt"
+
+    while IFS= read -r rel_path; do
+        # Skip empty lines and comments
+        [ -z "$rel_path" ] && continue
+        case "$rel_path" in
+            '#'*) continue ;;
+        esac
+
+        local target="${OPENWRT_ROOT}/${rel_path}"
+        if [ -f "$target" ] || [ -d "$target" ]; then
+            rm -rf "$target"
+            removed=$((removed + 1))
+            log_warn "  Removed (MTK remove-list): $rel_path"
+        fi
+    done < "$remove_list"
+
+    [ "$removed" -gt 0 ] && log_info "  Removed $removed entries from MTK remove-list"
+    [ "$removed" -eq 0 ] && log_info "  No matching entries in MTK remove-list"
+
+    return 0
+}
+
 ensure_bpi_r4_mtk_packages() {
     local filogic_mk="${OPENWRT_ROOT}/target/linux/mediatek/image/filogic.mk"
 
@@ -961,12 +997,19 @@ main() {
     #      ImmortalWrt's extroot-for-non-MTD-rootfs_data patch.
     remove_mtk_fstools_overlay_patches
 
+    # 4.2. Apply MTK's own remove_list-mtwifi.txt as supplementary
+    #      conflict cleanup.  MTK maintains this list for known
+    #      vanilla-OpenWrt overlaps; we apply it on top of our local
+    #      rules (step 2 clean_conflicting_immortalwrt_patches).
+    remove_mtk_listed_conflicts
+
     # 5. 复制 filogic 特定文件
     local filogic_files="$MTK_SDK_DIR/autobuild/unified/filogic/25.12/files"
     if [ -d "$filogic_files" ]; then
         copy_files_safe "$filogic_files" "filogic/25.12/files"
     fi
     remove_mtk_fstools_overlay_patches
+    remove_mtk_listed_conflicts
     remove_broken_sfp_612_patches
     remove_stale_pcs_lynxi_612_patches
     sync_local_sfp_612_patches
