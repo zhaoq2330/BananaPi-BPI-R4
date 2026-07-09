@@ -99,6 +99,32 @@ jobs:
       run: |
         ./scripts/feeds update -a
 
+    - name: Install base and MTK feed packages
+      working-directory: ./openwrt
+      run: |
+        fix_flowtable_dep() {
+          for flowtable_mk in \
+            "${{ env.MTK_SDK_DIR }}/feed/flowtable/Makefile" \
+            "${{ env.MTK_SDK_DIR }}/feed/kernel/flowtable/Makefile" \
+            feeds/mtk_openwrt_feed/flowtable/Makefile \
+            feeds/mtk_openwrt_feed/kernel/flowtable/Makefile \
+            package/feeds/mtk_openwrt_feed/flowtable/Makefile; do
+            [ -f "$flowtable_mk" ] && sed -i -E 's/[[:space:]]*\+?kmod-nf-flow-netlink//g' "$flowtable_mk"
+          done
+
+          for dep_file in \
+            $(find "${{ env.MTK_SDK_DIR }}/feed" feeds/mtk_openwrt_feed package/feeds/mtk_openwrt_feed tmp/info \
+              -type f 2>/dev/null | xargs grep -l 'kmod-nf-flow-netlink' 2>/dev/null || true); do
+            sed -i -E 's/[[:space:]]*\+?kmod-nf-flow-netlink//g' "$dep_file"
+          done
+        }
+
+        fix_flowtable_dep
+        ./scripts/feeds update mtk_openwrt_feed >/dev/null 2>&1 || true
+        fix_flowtable_dep
+        ./scripts/feeds install -a
+        fix_flowtable_dep
+
     - name: Load config
       run: |
         [ -e "$CONFIG_FILE" ] && cat "$CONFIG_FILE" > openwrt/.config
