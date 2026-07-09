@@ -632,8 +632,8 @@ $(load_rule_file "$(rule_path "builtin-kconfig.txt")")
         while IFS= read -r pattern; do
             case "$pattern" in
                 ''|'#'*) continue ;;
-                '['keep']')  mode="keep";  continue ;;
-                '['unset']') mode="unset"; continue ;;
+                '\[keep\]')  mode="keep";  continue ;;
+                '\[unset\]') mode="unset"; continue ;;
             esac
 
             [ -z "$mode" ] && continue
