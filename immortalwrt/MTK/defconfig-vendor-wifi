@@ -27,7 +27,7 @@ CONFIG_PACKAGE_kmod-mtk_wed=y
 CONFIG_PACKAGE_kmod-mediatek_hnat=y
 
 # MTK platform packages (minimum set).
-# overlayfs_encryption depends on dmsetup which does not exist — disable.
+# overlayfs_encryption depends on dmsetup which does not exist: disable.
 # CONFIG_PACKAGE_overlayfs_encryption is not set
 CONFIG_PACKAGE_mii_mgr=y
 CONFIG_PACKAGE_regs=y
