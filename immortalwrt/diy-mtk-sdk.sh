@@ -53,6 +53,7 @@ load_rule_file() {
     local rule_file="$1"
     [ -f "$rule_file" ] || return 0
     while IFS= read -r line; do
+        line="${line%$'\r'}"
         case "$line" in
             ''|'#'*) continue ;;
         esac
@@ -155,7 +156,7 @@ is_unneeded_mtk_patch() {
     # Format: <patch_basename>|<reason_code>|<description>
     while IFS='|' read -r skip_name reason_code description; do
         [ "$pname" = "$skip_name" ] && return 0
-    done < "$skip_file"
+    done < <(load_rule_file "$skip_file")
 
     return 1
 }
@@ -174,7 +175,7 @@ mtk_patch_skip_reason() {
                 printf '%s: %s' "$reason_code" "$description"
                 return 0
             fi
-        done < "$skip_file"
+        done < <(load_rule_file "$skip_file")
     }
 
     printf 'not needed for BPI-R4 target'
@@ -486,6 +487,7 @@ remove_mtk_fstools_overlay_patches() {
     log_step "Removing MTK SDK overlay artifacts (from remove-after-overlay.txt)"
 
     while IFS= read -r overlay_path; do
+        overlay_path="${overlay_path%$'\r'}"
         case "$overlay_path" in ''|'#'*) continue ;; esac
         local target="${OPENWRT_ROOT}/${overlay_path}"
         if [ -f "$target" ] || [ -d "$target" ]; then
@@ -517,6 +519,7 @@ remove_mtk_listed_conflicts() {
     log_step "Applying MTK remove_list-mtwifi.txt"
 
     while IFS= read -r rel_path; do
+        rel_path="${rel_path%$'\r'}"
         # Skip empty lines and comments
         [ -z "$rel_path" ] && continue
         case "$rel_path" in
@@ -630,10 +633,11 @@ $(load_rule_file "$(rule_path "builtin-kconfig.txt")")
         [ -f "$pattern_file" ] || return 1
 
         while IFS= read -r pattern; do
+            pattern="${pattern%$'\r'}"
             case "$pattern" in
                 ''|'#'*) continue ;;
-                '\[keep\]')  mode="keep";  continue ;;
-                '\[unset\]') mode="unset"; continue ;;
+                '[keep]')  mode="keep";  continue ;;
+                '[unset]') mode="unset"; continue ;;
             esac
 
             [ -z "$mode" ] && continue
