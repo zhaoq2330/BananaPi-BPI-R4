@@ -98,6 +98,15 @@ CONFIG_PACKAGE_kmod-nls-cp950=y
 CONFIG_PACKAGE_kmod-nls-utf8=y
 CONFIG_PACKAGE_kmod-nft-flow-offload=y
 CONFIG_PACKAGE_kmod-mediatek_hnat=y
+
+# MTK debug / diagnostic tools from mtk_openwrt_feed.
+CONFIG_PACKAGE_pce=y
+CONFIG_PACKAGE_mtkhnat_util=y
+CONFIG_PACKAGE_ethswbox=y
+CONFIG_PACKAGE_flowtable=y
+CONFIG_PACKAGE_netsys_dbg_util=y
+CONFIG_PACKAGE_tops-tool=y
+
 CONFIG_PACKAGE_parted=y
 CONFIG_PACKAGE_smartmontools=y
 CONFIG_PACKAGE_kmod-nvme=y
