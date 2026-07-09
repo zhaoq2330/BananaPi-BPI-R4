@@ -1,0 +1,139 @@
+name: immortalwrt_25.12_vendor_wifi
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+
+env:
+  REPO_URL: https://github.com/immortalwrt/immortalwrt
+  REPO_BRANCH: openwrt-25.12
+  CONFIG_FILE: immortalwrt/MTK/defconfig-vendor-wifi
+  DIY_P0_SH: immortalwrt/diy-mtk-sdk.sh
+  UPLOAD_FIRMWARE: true
+  TZ: Asia/Shanghai
+  OPENWRT_NAME: immortalwrt
+  OPENWRT_DEVICE: mediatek
+  MTK_SDK_URL: https://github.com/mediatek/mtk-openwrt-feeds.git
+  MTK_SDK_BRANCH: main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Maximize build space
+      uses: easimon/maximize-build-space@v10
+      with:
+        root-reserve-mb: 512
+        swap-size-mb: 1024
+        remove-dotnet: 'true'
+        remove-android: 'true'
+        remove-haskell: 'true'
+        remove-codeql: 'true'
+
+    - name: Check out the project branch
+      uses: actions/checkout@v6.0.2
+
+    - name: Initialize the compilation environment
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        ( sudo -E apt-get -qq update
+        sudo -E apt-get -qq install build-essential clang flex g++ gawk gcc-multilib gettext \
+        git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev swig libpython3-dev aria2 jq subversion qemu-utils ccache rename libelf-dev
+        sudo -E apt-get -qq purge azure-cli ghc* zulu* hhvm llvm* firefox powershell openjdk* dotnet* google* mysql* php* android* rename speedtest-cli
+        sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
+        sudo -E apt-get -qq autoremove --purge
+        sudo -E apt-get -qq clean ) &
+        sudo timedatectl set-timezone "$TZ"
+
+    - name: Download firmware source code
+      run: |
+        git clone --depth 1 $REPO_URL -b $REPO_BRANCH openwrt
+
+    - name: Restore toolchain cache
+      uses: klever1988/cachewrtbuild@54ed4fe2f7d8b5cfbc0b928c159266ee892c2d3d
+      with:
+        ccache: 'false'
+        prefix: ${{ github.workspace }}/openwrt
+        mixkey: ${{ env.OPENWRT_NAME }}-${{ env.OPENWRT_DEVICE }}-${{ env.REPO_BRANCH }}
+
+    - name: Clone MTK SDK
+      run: |
+        MTK_SDK_DIR="${{ github.workspace }}/mtk-openwrt-feeds"
+        git clone --depth=1 --branch "${{ env.MTK_SDK_BRANCH }}" "${{ env.MTK_SDK_URL }}" "$MTK_SDK_DIR"
+        echo "MTK_SDK_DIR=$MTK_SDK_DIR" >> $GITHUB_ENV
+
+    - name: Apply MTK SDK patches and files
+      run: |
+        chmod +x $OPENWRT_NAME/*.sh
+        cd openwrt
+        export MTK_SDK_DIR="${{ env.MTK_SDK_DIR }}"
+        export GITHUB_WORKSPACE="${{ github.workspace }}"
+        $GITHUB_WORKSPACE/$DIY_P0_SH
+
+    - name: Show MTK SDK conflict report
+      if: always()
+      run: |
+        if [ -f "${{ github.workspace }}/mtk-sdk-conflict-log.txt" ]; then
+          echo "=== MTK SDK Conflict Report ==="
+          cat "${{ github.workspace }}/mtk-sdk-conflict-log.txt"
+        fi
+        if [ -f "${{ github.workspace }}/mtk-sdk-skipped-log.txt" ]; then
+          echo "=== MTK SDK Skipped Patches ==="
+          cat "${{ github.workspace }}/mtk-sdk-skipped-log.txt"
+        fi
+
+    - name: Copy NPU supplementary header
+      run: |
+        DEST="openwrt/target/linux/mediatek/files-6.12/drivers/net/ethernet/mediatek"
+        mkdir -p "$DEST"
+        cp scripts/mtk_eth_reset.h "$DEST/"
+        echo "Copied mtk_eth_reset.h to $DEST"
+
+    - name: Update base feed indexes
+      working-directory: ./openwrt
+      run: |
+        ./scripts/feeds update -a
+
+    - name: Load config
+      run: |
+        [ -e "$CONFIG_FILE" ] && cat "$CONFIG_FILE" > openwrt/.config
+        cd openwrt
+        make defconfig
+        cat .config
+
+    - name: Download the installation package
+      id: package
+      run: |
+        cd openwrt
+        make download -j$(nproc)
+        find dl -size -1024c -exec ls -l {} \;
+        find dl -size -1024c -exec rm -f {} \;
+
+    - name: Compile the firmware
+      id: compile
+      run: |
+        cd openwrt
+        echo -e "$(nproc) thread compile"
+        make -j$(nproc) || make -j$(($(nproc)/2 + 1)) || make -j1 V=s
+        echo "date1=$(date +'%Y.%m.%d')" >> $GITHUB_ENV
+        echo "status=success" >> $GITHUB_OUTPUT
+
+    - name: Organize and Rename Files
+      id: organize
+      if: ${{ steps.compile.outputs.status == 'success' && env.UPLOAD_FIRMWARE == 'true' && !cancelled() }}
+      run: |
+        cd openwrt/bin/targets/mediatek/filogic
+        rm -rf packages *mt798* *.config *.buildinfo *.json sha256sums
+        echo "FIRMWARE=$PWD" >> $GITHUB_ENV
+
+    - name: Upload the firmware to github
+      uses: actions/upload-artifact@v7.0.1
+      if: steps.organize.outcome == 'success' && !cancelled()
+      with:
+        name: ${{ env.date1 }}_vendor_wifi_${{ env.OPENWRT_NAME }}_${{ env.OPENWRT_DEVICE }}_${{ env.REPO_BRANCH }}
+        path: ${{ env.FIRMWARE }}
