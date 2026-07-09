@@ -478,6 +478,29 @@ verify_local_sfp_612_patches() {
     log_info "Verified local 6.12 SFP patch split: 2778.1 present, 2779 has 11 hunks, LF-only"
 }
 
+remove_mtk_fstools_overlay_patches() {
+    # BPI-R4 does not use MTK RFB dual-boot / FIT read-write overlayfs
+    # plumbing.  These SDK overlay patches modify fstools CMakeLists.txt and
+    # conflict with ImmortalWrt's extroot-for-non-MTD-rootfs_data patch.
+    local patch_dir="${OPENWRT_ROOT}/package/system/fstools/patches"
+    local removed=0
+    local patch_name
+
+    [ -d "$patch_dir" ] || return 0
+
+    for patch_name in \
+        0001-add-support-for-dual-boot.patch \
+        0002-add-support-fitrw-overlayfs-encryption.patch; do
+        if [ -f "$patch_dir/$patch_name" ]; then
+            rm -f "$patch_dir/$patch_name"
+            removed=$((removed + 1))
+            log_warn "Removed MTK SDK fstools overlay patch: $patch_name (not needed for BPI-R4)"
+        fi
+    done
+
+    [ "$removed" -eq 0 ] && log_info "No MTK SDK fstools overlay patches found"
+}
+
 ensure_bpi_r4_mtk_packages() {
     local filogic_mk="${OPENWRT_ROOT}/target/linux/mediatek/image/filogic.mk"
 
@@ -930,11 +953,16 @@ main() {
     remove_stale_pcs_lynxi_612_patches
     sync_local_sfp_612_patches
 
+    # 4.1. Remove MTK SDK fstools overlay patches that conflict with
+    #      ImmortalWrt's extroot-for-non-MTD-rootfs_data patch.
+    remove_mtk_fstools_overlay_patches
+
     # 5. 复制 filogic 特定文件
     local filogic_files="$MTK_SDK_DIR/autobuild/unified/filogic/25.12/files"
     if [ -d "$filogic_files" ]; then
         copy_files_safe "$filogic_files" "filogic/25.12/files"
     fi
+    remove_mtk_fstools_overlay_patches
     remove_broken_sfp_612_patches
     remove_stale_pcs_lynxi_612_patches
     sync_local_sfp_612_patches
