@@ -1,6 +1,6 @@
 # ImmortalWrt openwrt-25.12 minimal defconfig for BPI-R4 vendor WiFi test.
 # Purpose: verify MTK vendor mt76-vendor driver compiles and boots.
-# This is a stripped-down config — no Docker, no proxy, no extras.
+# This is a stripped-down config: no Docker, no proxy, no extras.
 
 CONFIG_TARGET_mediatek=y
 CONFIG_TARGET_mediatek_filogic=y
@@ -19,7 +19,7 @@ CONFIG_PACKAGE_dnsmasq-full=y
 CONFIG_PACKAGE_odhcp6c=y
 CONFIG_PACKAGE_odhcpd-ipv6only=y
 
-# MTK vendor WiFi stack — replaces kmod-mt76* / kmod-mt799*.
+# MTK vendor WiFi stack: replaces kmod-mt76* / kmod-mt799*.
 CONFIG_PACKAGE_kmod-cfg80211=y
 # CONFIG_PACKAGE_kmod-mac80211 is not set
 CONFIG_PACKAGE_mt76-vendor=y
@@ -62,9 +62,6 @@ CONFIG_LUCI_LANG_zh_Hans=y
 CONFIG_PACKAGE_luci-ssl-openssl=y
 CONFIG_PACKAGE_luci-app-firewall=y
 CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
-
-# Community theme.
-CONFIG_PACKAGE_luci-theme-argon=y
 
 # SFP / PHY.
 CONFIG_PACKAGE_kmod-sfp=y
