@@ -478,6 +478,33 @@ verify_local_sfp_612_patches() {
     log_info "Verified local 6.12 SFP patch split: 2778.1 present, 2779 has 11 hunks, LF-only"
 }
 
+remove_mtk_fstools_overlay_patches() {
+    # BPI-R4 does not use MTK RFB dual-boot / FIT read-write overlayfs
+    # plumbing.  These SDK overlay patches modify fstools CMakeLists.txt and
+    # conflict with ImmortalWrt's extroot-for-non-MTD-rootfs_data patch.
+    local patch_dir="${OPENWRT_ROOT}/package/system/fstools/patches"
+    local removed=0
+    local patch_name
+
+    [ -d "$patch_dir" ] || return 0
+
+    for patch_name in \
+        0001-add-support-for-dual-boot.patch \
+        0002-add-support-fitrw-overlayfs-encryption.patch; do
+        if [ -f "$patch_dir/$patch_name" ]; then
+            rm -f "$patch_dir/$patch_name"
+            removed=$((removed + 1))
+            log_warn "Removed MTK SDK fstools overlay patch: $patch_name (not needed for BPI-R4)"
+        fi
+    done
+
+    if [ "$removed" -eq 0 ]; then
+        log_info "No MTK SDK fstools overlay patches found"
+    fi
+
+    return 0
+}
+
 ensure_bpi_r4_mtk_packages() {
     local filogic_mk="${OPENWRT_ROOT}/target/linux/mediatek/image/filogic.mk"
 
@@ -530,7 +557,17 @@ ensure_kernel_config_fixes() {
 NET_DSA_MXL862
 NET_DSA_TAG_MXL862
 NET_DSA_TAG_MXL862_8021Q
+MT753X_GSW
 "
+    local kconfig_builtin_symbols="
+MEDIATEK_2P5GE_PHY
+NETFILTER
+NF_CONNTRACK
+NF_FLOW_TABLE
+"
+    local scan_symbols_file="${OPENWRT_ROOT}/tmp/mtk-sdk-kconfig-symbols.txt"
+    local auto_unset_file="${OPENWRT_ROOT}/tmp/mtk-sdk-kconfig-auto-unset.txt"
+    local review_file="${OPENWRT_ROOT}/tmp/mtk-sdk-kconfig-review.txt"
 
     ensure_unset_symbol() {
         local config_file="$1"
@@ -541,18 +578,122 @@ NET_DSA_TAG_MXL862_8021Q
         printf '# CONFIG_%s is not set\n' "$symbol" >> "$config_file"
     }
 
+    ensure_builtin_symbol() {
+        local config_file="$1"
+        local symbol="$2"
+
+        [ -f "$config_file" ] || return 0
+        sed -i "/^CONFIG_${symbol}=/d; /^# CONFIG_${symbol} is not set$/d" "$config_file"
+        printf 'CONFIG_%s=y\n' "$symbol" >> "$config_file"
+    }
+
+    is_symbol_configured() {
+        local symbol="$1"
+
+        grep -qsE "^(CONFIG_${symbol}=|# CONFIG_${symbol} is not set$)" \
+            "${OPENWRT_ROOT}/target/linux/generic/config-6.12" \
+            "${OPENWRT_ROOT}/target/linux/mediatek/filogic/config-6.12" \
+            "${OPENWRT_ROOT}/.config" 2>/dev/null
+    }
+
+    should_auto_unset_kconfig_symbol() {
+        local symbol="$1"
+
+        case "$symbol" in
+            # BPI-R4 core path: keep these controlled by defconfig/packages.
+            SFP|MDIO_I2C|FIXED_PHY|PHYLINK|PHYLIB|SWPHY|NET_DSA|NET_DSA_MT7530*|\
+            PCS_MTK_*|PHY_MTK_*|MTK_NETSYS*|MTK_HNAT*|MTK_PPE*|MTK_WED*|\
+            MT798*|MT799*|MT76*|MEDIATEK_2P5GE_PHY|NVMEM_MTK_*|PINCTRL_MTK_*|PWM_MTK_*|\
+            PCIE_MEDIATEK*|ARCH_MEDIATEK|ARM64)
+                return 1
+                ;;
+            # MTK SDK carries these for other RFBs/legacy switch stacks.
+            NET_DSA_MXL862|NET_DSA_TAG_MXL862*|MT753X_GSW|SWCONFIG|\
+            AIROHA_AN8801_PHY|AIR_AN8811HB_PHY*|AN8855_GSW|\
+            MIKROTIK_*|MTD_SPLIT_CFE_BOOTFS|MTK_EMIMPU|\
+            USB_XHCI_MTK_DEBUGFS|ZTS8032|ZTS8232|\
+            ADM6996_PHY|AR8216_PHY|IP17XX_PHY|PSB6970_PHY|RTL8306_PHY|RTL8366_SMI|\
+            SWCONFIG_B53_*|\
+            NET_DSA_BCM_*|NET_DSA_LOOP|NET_DSA_LANTIQ_*|NET_DSA_MV*|\
+            NET_DSA_MSCC_*|NET_DSA_AR9331|NET_DSA_QCA8K*)
+                return 0
+                ;;
+        esac
+
+        return 1
+    }
+
+    scan_mtk_sdk_kconfig_symbols() {
+        mkdir -p "${OPENWRT_ROOT}/tmp"
+        : > "$scan_symbols_file"
+        : > "$auto_unset_file"
+        : > "$review_file"
+
+        find \
+            "${OPENWRT_ROOT}/target/linux/mediatek" \
+            "${OPENWRT_ROOT}/target/linux/generic" \
+            -type f \( -name 'Kconfig' -o -name 'Kconfig.*' \) \
+            -exec sed -n 's/^[[:space:]]*config[[:space:]]\{1,\}\([A-Za-z0-9_]\{1,\}\).*/\1/p' {} \; \
+            >> "$scan_symbols_file" 2>/dev/null || true
+
+        find "${OPENWRT_ROOT}/target/linux/mediatek/patches-6.12" -type f -name '*.patch' \
+            -exec sed -n 's/^+[[:space:]]*config[[:space:]]\{1,\}\([A-Za-z0-9_]\{1,\}\).*/\1/p' {} \; \
+            >> "$scan_symbols_file" 2>/dev/null || true
+
+        sort -u "$scan_symbols_file" -o "$scan_symbols_file"
+
+        while IFS= read -r symbol; do
+            [ -n "$symbol" ] || continue
+            is_symbol_configured "$symbol" && continue
+            if should_auto_unset_kconfig_symbol "$symbol"; then
+                printf '%s\n' "$symbol" >> "$auto_unset_file"
+            else
+                printf '%s\n' "$symbol" >> "$review_file"
+            fi
+        done < "$scan_symbols_file"
+
+        if [ -s "$auto_unset_file" ]; then
+            log_warn "Auto-unsetting non-BPI-R4 MTK SDK Kconfig symbols: $(tr '\n' ' ' < "$auto_unset_file")"
+            kconfig_unset_symbols="$kconfig_unset_symbols
+$(cat "$auto_unset_file")
+"
+        else
+            log_info "No extra non-BPI-R4 MTK SDK Kconfig symbols detected"
+        fi
+
+        if [ -s "$review_file" ]; then
+            local review_count
+            review_count=$(wc -l < "$review_file" | tr -d ' ')
+            log_warn "Unconfigured MTK SDK Kconfig symbols needing review ($review_count total; first 80): $(head -n 80 "$review_file" | tr '\n' ' ')"
+            log_warn "Full review list: $review_file"
+        else
+            log_info "No unconfigured MTK SDK Kconfig symbols need manual review"
+        fi
+    }
+
+    for symbol in $kconfig_builtin_symbols; do
+        ensure_builtin_symbol "$kernel_config" "$symbol"
+    done
+
+    scan_mtk_sdk_kconfig_symbols
+
     mkdir -p "$(dirname "$allconfig")"
     cat > "$allconfig" <<KCONFEOF
 # Auto-generated by diy-mtk-sdk.sh: default all unknown Kconfig symbols
 # to 'n' so kernel syncconfig never blocks in CI.
 KCONFEOF
 
+    for symbol in $kconfig_builtin_symbols; do
+        ensure_builtin_symbol "$allconfig" "$symbol"
+        ensure_builtin_symbol "$kernel_config" "$symbol"
+    done
+
     for symbol in $kconfig_unset_symbols; do
         ensure_unset_symbol "$allconfig" "$symbol"
         ensure_unset_symbol "$kernel_config" "$symbol"
     done
 
-    log_info "Created kconfig-allnoconfig and ensured MTK SDK DSA symbols are unset"
+    log_info "Created kconfig-allnoconfig and ensured MTK SDK Kconfig symbols are pinned"
 
     inject_kconfig_allconfig() {
         local target_mk="$1"
@@ -816,11 +957,16 @@ main() {
     remove_stale_pcs_lynxi_612_patches
     sync_local_sfp_612_patches
 
+    # 4.1. Remove MTK SDK fstools overlay patches that conflict with
+    #      ImmortalWrt's extroot-for-non-MTD-rootfs_data patch.
+    remove_mtk_fstools_overlay_patches
+
     # 5. 复制 filogic 特定文件
     local filogic_files="$MTK_SDK_DIR/autobuild/unified/filogic/25.12/files"
     if [ -d "$filogic_files" ]; then
         copy_files_safe "$filogic_files" "filogic/25.12/files"
     fi
+    remove_mtk_fstools_overlay_patches
     remove_broken_sfp_612_patches
     remove_stale_pcs_lynxi_612_patches
     sync_local_sfp_612_patches
