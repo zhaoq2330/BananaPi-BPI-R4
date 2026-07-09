@@ -1,0 +1,11 @@
+# ============================================================================
+# 在 MTK SDK files overlay 之后删除的文件
+# 格式: <relative_path_from_openwrt_root>
+# 原因: BPI-R4 不使用 MTK RFB 双启动/FIT overlay 等机制，这些文件
+#       会与 ImmortalWrt 自带补丁冲突。
+# ============================================================================
+
+# fstools — MTK RFB dual-boot / FIT read-write overlayfs 补丁
+# 会修改 CMakeLists.txt 与 ImmortalWrt 的 extroot patch 冲突
+package/system/fstools/patches/0001-add-support-for-dual-boot.patch
+package/system/fstools/patches/0002-add-support-fitrw-overlayfs-encryption.patch

@@ -1,0 +1,16 @@
+# ============================================================================
+# 内核 Kconfig 符号 — 强制设为 "is not set" (=n)
+# 格式: <CONFIG_SYMBOL>
+# 原因: MTK SDK 引入了 MxL862xx DSA switch / MT753X legacy GSW 等
+#       非 BPI-R4 硬件驱动，不做关闭会导致 syncconfig 交互卡死。
+# 注意事项: BPI-R4 核心路径符号 (MT7530/SFP/PCS/MT76/PCIe) 由
+#           should_auto_unset_kconfig_symbol() 白名单保护。
+# ============================================================================
+
+# MxL862xx — MTK SDK 引入的 DSA switch 驱动链
+NET_DSA_MXL862
+NET_DSA_TAG_MXL862
+NET_DSA_TAG_MXL862_8021Q
+
+# MT753X GSW — 旧版 MTK switch 栈
+MT753X_GSW
