@@ -95,6 +95,37 @@ jobs:
           cp -af "$SRC"/* "$DEST/" 2>/dev/null || true
           echo "Autobuild overlay applied to $DEST"
         fi
+
+        PATCH_SRC="${{ env.MTK_SDK_DIR }}/autobuild/unified/global/logan_common/25.12/files/target/linux/mediatek/patches-6.12"
+        PATCH_DST="openwrt/target/linux/mediatek/patches-6.12"
+        if [ -d "$PATCH_SRC" ]; then
+          for p in \
+            999-eth-91-mtk_eth_soc-add-mtkhnat-driver-support.patch \
+            999-hnat-02-mtk_eth_soc-add-support-ppe-flow-check-interrupt.patch \
+            999-hnat-03-netfilter-nf_flow_table-support-hw-offload-through-v.patch \
+            999-hnat-04-net-8021q-support-hardware-flow-table-offload.patch \
+            999-hnat-05-net-bridge-support-hardware-flow-table-offload.patch \
+            999-hnat-06-net-pppoe-support-hardware-flow-table-offload.patch \
+            999-hnat-07-net-dsa-support-hardware-flow-table-offload.patch \
+            999-hnat-08-net-macvlan-support-hardware-flow-table-offload.patch \
+            999-hnat-09-mtkhnat-add-support-for-virtual-interface-acceleration.patch \
+            999-hnat-11-net-ipv4-support-frag-gso-skb-headroom-copy.patch \
+            999-hnat-12-net-core-skbuff-ipv6-fix-pskb-expand-head-limitation.patch \
+            999-hnat-13-mtkhnat-refactor-mtk-headroom-copy.patch \
+            999-hnat-14-net-vlan-add-ndo_flow_offload_stats64_add-for-offload-stats-correction.patch \
+            999-hnat-15-ppp-add-ndo_flow_offload_stats64_add-for-offload-stats-correction.patch \
+            999-net-03-netdevice-add-tnl-device-path-type.patch \
+            999-tnl-01-mtk-tunnel-offload-support.patch \
+            999-tnl-02-mtk-gre-offload-support.patch \
+            999-tnl-04-mtk-vxlan-offload-support.patch \
+            999-tnl-06-mtk-pptp-offload-support.patch \
+            999-tnl-90-mtk-l2tp-offload-support.patch
+          do
+            [ -f "$PATCH_SRC/$p" ] && cp -f "$PATCH_SRC/$p" "$PATCH_DST/$p"
+          done
+          echo "Autobuild HNAT/NPU kernel patches overlaid to $PATCH_DST"
+        fi
+
         PATCH="${{ env.MTK_SDK_DIR }}/autobuild/unified/global/logan_common/25.12/files/target/linux/mediatek/patches-6.12/999-eth-93-mtk_eth_soc-add-internal-SER-notify-event.patch"
         HDR="$DEST/drivers/net/ethernet/mediatek/mtk_eth_reset.h"
         mkdir -p "$(dirname "$HDR")"
@@ -122,16 +153,16 @@ jobs:
 
     - name: Export HNAT symbols for NPU module linkage
       run: |
-        NETDEV_MK="openwrt/package/kernel/linux/modules/netdevices.mk"
-        if grep -q 'KernelPackage/mediatek_hnat' "$NETDEV_MK" && \
-           ! grep -q 'KERNEL_EXTRA_SYMBOLS.*:=.*1' "$NETDEV_MK"; then
-          sed -i '/^define KernelPackage\/mediatek_hnat$/,/^endef$/{
-            /DEPENDS:=/a\  KERNEL_EXTRA_SYMBOLS:=1
-          }' "$NETDEV_MK"
-          echo "Added KERNEL_EXTRA_SYMBOLS:=1 to KernelPackage/mediatek_hnat"
-          grep -A2 'KernelPackage/mediatek_hnat' "$NETDEV_MK" | head -5
+        NPU_MK="${{ env.MTK_SDK_DIR }}/feed/kernel/mtk_npu/Makefile"
+        if grep -q 'define Build/Compile' "$NPU_MK" && \
+           ! grep -q 'LINUX_DIR)/Module.symvers' "$NPU_MK"; then
+          sed -i '/^define Build\/Compile/,/^endef$/{
+            /M="\$(PKG_BUILD_DIR)"/a\\		KBUILD_EXTRA_SYMBOLS="\$(KBUILD_EXTRA_SYMBOLS) \$(LINUX_DIR)/Module.symvers" \\
+          }' "$NPU_MK"
+          echo "Injected kernel Module.symvers into NPU Build/Compile"
+          sed -n '/^define Build\/Compile/,/^endef$/p' "$NPU_MK"
         else
-          echo "KERNEL_EXTRA_SYMBOLS already present or KernelPackage/mediatek_hnat not found"
+          echo "HNAT symvers already present or NPU Makefile not found"
         fi
 
     - name: Update base feed indexes
