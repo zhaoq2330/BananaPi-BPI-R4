@@ -27,12 +27,14 @@
 set -euo pipefail
 
 # ── 配置 ────────────────────────────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKSPACE_ROOT="${GITHUB_WORKSPACE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 MTK_SDK_URL="${MTK_SDK_URL:-https://github.com/mediatek/mtk-openwrt-feeds.git}"
 MTK_SDK_BRANCH="${MTK_SDK_BRANCH:-main}"
-MTK_SDK_DIR="${MTK_SDK_DIR:-${GITHUB_WORKSPACE:-$(pwd)/..}/mtk-openwrt-feeds}"
-CONFLICT_LOG="${GITHUB_WORKSPACE:-.}/mtk-sdk-conflict-log.txt"
-APPLIED_LOG="${GITHUB_WORKSPACE:-.}/mtk-sdk-applied-log.txt"
-SKIPPED_LOG="${GITHUB_WORKSPACE:-.}/mtk-sdk-skipped-log.txt"
+MTK_SDK_DIR="${MTK_SDK_DIR:-${WORKSPACE_ROOT}/mtk-openwrt-feeds}"
+CONFLICT_LOG="${WORKSPACE_ROOT}/mtk-sdk-conflict-log.txt"
+APPLIED_LOG="${WORKSPACE_ROOT}/mtk-sdk-applied-log.txt"
+SKIPPED_LOG="${WORKSPACE_ROOT}/mtk-sdk-skipped-log.txt"
 OPENWRT_ROOT="${OPENWRT_ROOT:-$(pwd)}"
 
 # 颜色
@@ -43,6 +45,28 @@ log_info()  { echo -e "${GREEN}[MTK-SDK]${NC} $*"; }
 log_warn()  { echo -e "${YELLOW}[MTK-SDK WARN]${NC} $*"; }
 log_error() { echo -e "${RED}[MTK-SDK ERROR]${NC} $*"; }
 log_step()  { echo -e "${BLUE}[MTK-SDK STEP]${NC} $*"; }
+
+# ── 规则文件加载 ────────────────────────────────────────────────────────
+# 从外部数据文件加载规则列表，跳过空行和注释行。
+# 用法: load_rule_file <rule_file> 输出到 stdout
+load_rule_file() {
+    local rule_file="$1"
+    [ -f "$rule_file" ] || return 0
+    while IFS= read -r line; do
+        line="${line%$'\r'}"
+        case "$line" in
+            ''|'#'*) continue ;;
+        esac
+        printf '%s\n' "$line"
+    done < "$rule_file"
+}
+
+# 返回 rule 文件路径，不存在返回空
+rule_path() {
+    local rule_name="$1"
+    local path="${WORKSPACE_ROOT}/immortalwrt/mtk-sdk-rules/${rule_name}"
+    [ -f "$path" ] && printf '%s' "$path"
+}
 
 # ── 参数处理 ────────────────────────────────────────────────────────────
 DRY_RUN="${SKIP_PATCH_APPLY:-0}"
@@ -125,40 +149,14 @@ is_unneeded_mtk_patch() {
     [ "$label" = "patches-base" ] || return 1
     pname=$(basename "$patch_file")
 
-    case "$pname" in
-        1132-image-mediatek-filogic-add-bananapi-bpi-r4-lite-support.patch)
-            # This build targets the full BPI-R4, not R4 Lite. Avoid partial
-            # image/upgrade script rejects from a board we do not emit.
-            return 0
-            ;;
-        1133-image-mediatek-filogic-add-bananapi-bpi-r4-support.patch)
-            # ImmortalWrt already carries BPI-R4 image support and the MTK file
-            # overlay establishes the local baseline.  Do not partially apply
-            # another BPI-R4 device block over it; post steps add the one SDK
-            # package dependency we actually need.
-            return 0
-            ;;
-        1142-image-mediatek-filogic-mt7987a-rfb-03-add-spidev-overlays.patch|\
-        1142-image-mediatek-filogic-mt7987a-rfb-06-add-wifi-gen-dtso.patch|\
-        3000-fstools-dual-boot-add-support-to-build-libfstools-bootparam.patch|\
-        3602-mediatek-filogic-base-files-remove-dm-devices-before-upgrade.patch|\
-        3600-mediatek-filogic-base-files-add-support-for-MediaTek-RBFs-upgrade.patch)
-            # MTK RFB/dual-boot support is not needed for BPI-R4 images and is
-            # prone to noisy rejects against ImmortalWrt's base-files/fstools.
-            return 0
-            ;;
-        1146-image-mediatek-filogic-enable-kmod-mt798x-2p5g-phy.patch)
-            # Replace the broad reference-board patch with a targeted BPI-R4
-            # DEVICE_PACKAGES fix in ensure_bpi_r4_mtk_packages().
-            return 0
-            ;;
-        3704-crypto-remove-safexcel-from-default-package.patch)
-            # Cosmetic default-package delta for MTK reference targets. If
-            # safexcel needs to be removed, do it in config/package defaults
-            # instead of partially applying a target Makefile patch.
-            return 0
-            ;;
-    esac
+    local skip_file
+    skip_file=$(rule_path "skip-patches.txt")
+    [ -f "$skip_file" ] || return 1
+
+    # Format: <patch_basename>|<reason_code>|<description>
+    while IFS='|' read -r skip_name reason_code description; do
+        [ "$pname" = "$skip_name" ] && return 0
+    done < <(load_rule_file "$skip_file")
 
     return 1
 }
@@ -169,21 +167,18 @@ mtk_patch_skip_reason() {
 
     pname=$(basename "$patch_file")
 
-    case "$pname" in
-        1133-image-mediatek-filogic-add-bananapi-bpi-r4-support.patch)
-            echo "BPI-R4 support already provided by ImmortalWrt/SDK overlay; avoid partial duplicate device block"
-            ;;
-        1146-image-mediatek-filogic-enable-kmod-mt798x-2p5g-phy.patch)
-            echo "replaced by targeted ensure_bpi_r4_mtk_packages post-step"
-            ;;
-        1142-image-mediatek-filogic-mt7987a-rfb-06-add-wifi-gen-dtso.patch|\
-        3602-mediatek-filogic-base-files-remove-dm-devices-before-upgrade.patch)
-            echo "MTK RFB/DM maintenance patch not needed for BPI-R4 target"
-            ;;
-        *)
-            echo "not needed for BPI-R4 target"
-            ;;
-    esac
+    local skip_file
+    skip_file=$(rule_path "skip-patches.txt")
+    [ -f "$skip_file" ] && {
+        while IFS='|' read -r skip_name reason_code description; do
+            if [ "$pname" = "$skip_name" ]; then
+                printf '%s: %s' "$reason_code" "$description"
+                return 0
+            fi
+        done < <(load_rule_file "$skip_file")
+    }
+
+    printf 'not needed for BPI-R4 target'
 }
 
 # 扫描目录内所有 patch，生成冲突报告
@@ -412,7 +407,7 @@ sync_local_sfp_612_patches() {
     # carry older local experiments or CRLF-normalized copies from previous CI
     # runs; always overwrite the SDK overlay and OpenWrt target patch directory
     # from this repository's 25.12 SFP patch source.
-    local local_sfp_dir="${GITHUB_WORKSPACE}/patches/filogic/sfp/25.12"
+    local local_sfp_dir="${WORKSPACE_ROOT}/patches/filogic/sfp/25.12"
     local target_patch_dir="${OPENWRT_ROOT}/target/linux/mediatek/patches-6.12"
     local mtk_patch_dir="$MTK_SDK_DIR/25.12/files/target/linux/mediatek/patches-6.12"
     local copied=0 skipped=0
@@ -479,28 +474,68 @@ verify_local_sfp_612_patches() {
 }
 
 remove_mtk_fstools_overlay_patches() {
-    # BPI-R4 does not use MTK RFB dual-boot / FIT read-write overlayfs
-    # plumbing.  These SDK overlay patches modify fstools CMakeLists.txt and
-    # conflict with ImmortalWrt's extroot-for-non-MTD-rootfs_data patch.
-    local patch_dir="${OPENWRT_ROOT}/package/system/fstools/patches"
+    # Remove MTK SDK files overlay artifacts that conflict with ImmortalWrt.
+    # The remove list is maintained in immortalwrt/mtk-sdk-rules/remove-after-overlay.txt
+    local rule_file; rule_file=$(rule_path "remove-after-overlay.txt")
     local removed=0
-    local patch_name
 
-    [ -d "$patch_dir" ] || return 0
+    [ -f "$rule_file" ] || {
+        log_info "No remove-after-overlay rule file found, skipping"
+        return 0
+    }
 
-    for patch_name in \
-        0001-add-support-for-dual-boot.patch \
-        0002-add-support-fitrw-overlayfs-encryption.patch; do
-        if [ -f "$patch_dir/$patch_name" ]; then
-            rm -f "$patch_dir/$patch_name"
+    log_step "Removing MTK SDK overlay artifacts (from remove-after-overlay.txt)"
+
+    while IFS= read -r overlay_path; do
+        overlay_path="${overlay_path%$'\r'}"
+        case "$overlay_path" in ''|'#'*) continue ;; esac
+        local target="${OPENWRT_ROOT}/${overlay_path}"
+        if [ -f "$target" ] || [ -d "$target" ]; then
+            rm -rf "$target"
             removed=$((removed + 1))
-            log_warn "Removed MTK SDK fstools overlay patch: $patch_name (not needed for BPI-R4)"
+            log_warn "  Removed (BPI_R4_OVERLAY_CLEANUP): $overlay_path"
         fi
-    done
+    done < "$rule_file"
 
-    if [ "$removed" -eq 0 ]; then
-        log_info "No MTK SDK fstools overlay patches found"
-    fi
+    [ "$removed" -gt 0 ] && log_info "  Removed $removed overlay artifact(s)"
+    [ "$removed" -eq 0 ] && log_info "  No matching overlay artifacts found"
+
+    return 0
+}
+
+remove_mtk_listed_conflicts() {
+    # Read MTK's own remove_list-mtwifi.txt as a supplementary conflict source.
+    # MTK maintains this list for known-vanilla-OpenWrt conflicts; we apply it
+    # on top of our own local rules to catch MTK-acknowledged overlaps.
+    # This is additive—it does NOT replace clean_conflicting_immortalwrt_patches().
+    local remove_list="${MTK_SDK_DIR}/25.12/remove_list-mtwifi.txt"
+    local removed=0
+
+    [ -f "$remove_list" ] || {
+        log_info "No MTK remove_list-mtwifi.txt found, skipping"
+        return 0
+    }
+
+    log_step "Applying MTK remove_list-mtwifi.txt"
+
+    while IFS= read -r rel_path; do
+        rel_path="${rel_path%$'\r'}"
+        # Skip empty lines and comments
+        [ -z "$rel_path" ] && continue
+        case "$rel_path" in
+            '#'*) continue ;;
+        esac
+
+        local target="${OPENWRT_ROOT}/${rel_path}"
+        if [ -f "$target" ] || [ -d "$target" ]; then
+            rm -rf "$target"
+            removed=$((removed + 1))
+            log_warn "  Removed (MTK remove-list): $rel_path"
+        fi
+    done < "$remove_list"
+
+    [ "$removed" -gt 0 ] && log_info "  Removed $removed entries from MTK remove-list"
+    [ "$removed" -eq 0 ] && log_info "  No matching entries in MTK remove-list"
 
     return 0
 }
@@ -554,16 +589,10 @@ ensure_kernel_config_fixes() {
     local allconfig="${OPENWRT_ROOT}/target/linux/mediatek/filogic/kconfig-allnoconfig"
     local kernel_config="${OPENWRT_ROOT}/target/linux/mediatek/filogic/config-6.12"
     local kconfig_unset_symbols="
-NET_DSA_MXL862
-NET_DSA_TAG_MXL862
-NET_DSA_TAG_MXL862_8021Q
-MT753X_GSW
+$(load_rule_file "$(rule_path "unset-kconfig.txt")")
 "
     local kconfig_builtin_symbols="
-MEDIATEK_2P5GE_PHY
-NETFILTER
-NF_CONNTRACK
-NF_FLOW_TABLE
+$(load_rule_file "$(rule_path "builtin-kconfig.txt")")
 "
     local scan_symbols_file="${OPENWRT_ROOT}/tmp/mtk-sdk-kconfig-symbols.txt"
     local auto_unset_file="${OPENWRT_ROOT}/tmp/mtk-sdk-kconfig-auto-unset.txt"
@@ -598,29 +627,31 @@ NF_FLOW_TABLE
 
     should_auto_unset_kconfig_symbol() {
         local symbol="$1"
+        local pattern_file; pattern_file=$(rule_path "kconfig-patterns.txt")
+        local mode=""
 
-        case "$symbol" in
-            # BPI-R4 core path: keep these controlled by defconfig/packages.
-            SFP|MDIO_I2C|FIXED_PHY|PHYLINK|PHYLIB|SWPHY|NET_DSA|NET_DSA_MT7530*|\
-            PCS_MTK_*|PHY_MTK_*|MTK_NETSYS*|MTK_HNAT*|MTK_PPE*|MTK_WED*|\
-            MT798*|MT799*|MT76*|MEDIATEK_2P5GE_PHY|NVMEM_MTK_*|PINCTRL_MTK_*|PWM_MTK_*|\
-            PCIE_MEDIATEK*|ARCH_MEDIATEK|ARM64)
-                return 1
-                ;;
-            # MTK SDK carries these for other RFBs/legacy switch stacks.
-            NET_DSA_MXL862|NET_DSA_TAG_MXL862*|MT753X_GSW|SWCONFIG|\
-            AIROHA_AN8801_PHY|AIR_AN8811HB_PHY*|AN8855_GSW|\
-            MIKROTIK_*|MTD_SPLIT_CFE_BOOTFS|MTK_EMIMPU|\
-            USB_XHCI_MTK_DEBUGFS|ZTS8032|ZTS8232|\
-            ADM6996_PHY|AR8216_PHY|IP17XX_PHY|PSB6970_PHY|RTL8306_PHY|RTL8366_SMI|\
-            SWCONFIG_B53_*|\
-            NET_DSA_BCM_*|NET_DSA_LOOP|NET_DSA_LANTIQ_*|NET_DSA_MV*|\
-            NET_DSA_MSCC_*|NET_DSA_AR9331|NET_DSA_QCA8K*)
-                return 0
-                ;;
-        esac
+        [ -f "$pattern_file" ] || return 1
 
-        return 1
+        while IFS= read -r pattern; do
+            pattern="${pattern%$'\r'}"
+            case "$pattern" in
+                ''|'#'*) continue ;;
+                '[keep]')  mode="keep";  continue ;;
+                '[unset]') mode="unset"; continue ;;
+            esac
+
+            [ -z "$mode" ] && continue
+
+            # Bash glob match: [[ $symbol == $pattern ]] where pattern has *
+            if [[ "$symbol" == $pattern ]]; then
+                case "$mode" in
+                    keep)  return 1 ;;  # BPI-R4 core: don't unset
+                    unset) return 0 ;;  # Non-BPI-R4: auto unset
+                esac
+            fi
+        done < "$pattern_file"
+
+        return 1  # Safe default: unknown symbols stay in review list
     }
 
     scan_mtk_sdk_kconfig_symbols() {
@@ -915,86 +946,76 @@ MKEOF
     true  # prevent set -e from seeing "restored>0 -> [ -eq 0 ] returns 1" as failure
 }
 
-# ── 主流程 ──────────────────────────────────────────────────────────────
-main() {
-    echo ""
-    echo "============================================================================"
-    echo "  MTK SDK Integration for ImmortalWrt 25.12"
-    echo "  SDK: $MTK_SDK_URL ($MTK_SDK_BRANCH)"
-    echo "  Target: $OPENWRT_ROOT"
-    echo "  Mode: $([ "$DRY_RUN" = "1" ] && echo 'DRY-RUN (no changes)' || echo 'LIVE')"
-    echo "============================================================================"
-    echo ""
-
-    # 初始化日志
+# ── 阶段 0: 初始化 ────────────────────────────────────────────────────
+stage_init() {
     echo "# MTK SDK Integration Log — $(date)" > "$CONFLICT_LOG"
     echo "# MTK SDK Applied Patches — $(date)" > "$APPLIED_LOG"
     echo "# MTK SDK Skipped Patches — $(date)" > "$SKIPPED_LOG"
     echo "MTK_SDK_DIR=$MTK_SDK_DIR" >> "$APPLIED_LOG"
     echo "MTK_SDK_BRANCH=$MTK_SDK_BRANCH" >> "$APPLIED_LOG"
+}
 
-    # 1. 克隆 SDK
+# ── 阶段 1: SDK 覆盖层同步 ──────────────────────────────────────────────
+stage_overlay() {
+    # 克隆 SDK
     clone_mtk_sdk || exit 1
 
-    # 2. 清理冲突
+    # 清理 ImmortalWrt 预置冲突补丁
     clean_conflicting_immortalwrt_patches
 
-    # 2.5. 移除已知不兼容 linux 6.12.94 的旧 SFP quirk 补丁
+    # 移除不兼容的旧 SFP quirk 补丁，注入本地 SFP/PCS 补丁
     remove_broken_sfp_612_patches
     remove_stale_pcs_lynxi_612_patches
-
-    # 3. 注入本地 SFP/PCS 补丁到 MTK SDK 的 patches-6.12 目录
-    #    参考 woziwrt: 在 autobuild/文件覆盖之前注入，确保补丁作为
-    #    MTK SDK 基线的一部分被复制到 OpenWrt 树。
     sync_local_sfp_612_patches
 
-    # 4. 复制 MTK SDK 文件覆盖层 — 必须在打补丁之前！
-    #    将 MTK SDK 的 25.12/files/（含步骤 3 注入的 SFP 补丁）复制到
-    #    OpenWrt 树，建立 MTK 基线。patches-base 预期修改的是这些
-    #    基线文件（如 filogic.mk, platform.sh, 02_network 等）。
+    # 复制 MTK SDK 25.12 文件覆盖层
     copy_files_safe "$MTK_SDK_DIR/25.12/files" "25.12/files"
-    remove_broken_sfp_612_patches
-    remove_stale_pcs_lynxi_612_patches
-    sync_local_sfp_612_patches
 
-    # 4.1. Remove MTK SDK fstools overlay patches that conflict with
-    #      ImmortalWrt's extroot-for-non-MTD-rootfs_data patch.
-    remove_mtk_fstools_overlay_patches
-
-    # 5. 复制 filogic 特定文件
+    # 复制 filogic 特定文件
     local filogic_files="$MTK_SDK_DIR/autobuild/unified/filogic/25.12/files"
     if [ -d "$filogic_files" ]; then
         copy_files_safe "$filogic_files" "filogic/25.12/files"
     fi
+
+    # 复写后归一化 SFP 补丁
+    remove_broken_sfp_612_patches
+    remove_stale_pcs_lynxi_612_patches
+    sync_local_sfp_612_patches
+}
+
+# ── 阶段 2: 覆盖后清理 ──────────────────────────────────────────────────
+stage_cleanup() {
+    # 移除不适用于 BPI-R4 的 MTK SDK overlay 产物
     remove_mtk_fstools_overlay_patches
+    remove_mtk_listed_conflicts
+
+    # 复写后归一化 + 验证 SFP 补丁
     remove_broken_sfp_612_patches
     remove_stale_pcs_lynxi_612_patches
     sync_local_sfp_612_patches
     verify_local_sfp_612_patches
 
-    # 6. 创建时间戳标记
     touch "${OPENWRT_ROOT}/.timestamp"
+}
 
-    # 7. 扫描 patches-base
+# ── 阶段 3: 补丁应用 ────────────────────────────────────────────────────
+stage_patches() {
     scan_patches "$MTK_SDK_DIR/25.12/patches-base" "patches-base" || true
-
-    # 8. 应用 patches-base
     apply_patches_safe "$MTK_SDK_DIR/25.12/patches-base" "patches-base"
+}
 
-    # 8.2. 用目标板后处理替代会产生 rejects 的宽泛 MTK RFB 补丁
+# ── 阶段 4: 内核配置与工具修正 ──────────────────────────────────────────
+stage_fixups() {
     ensure_bpi_r4_mtk_packages
     ensure_kernel_config_fixes
-
-    # 8.5. 验证关键构建工具完整性
-    #       MTK SDK 的文件覆盖和补丁可能破坏标准工具链。
     verify_critical_tools
+}
 
-    # 9. 注册 MTK feed 源
+# ── 阶段 5: Feed 注册与收尾 ─────────────────────────────────────────────
+stage_finalize() {
     add_mtk_feed
 
-    # 10. MTK SDK patches-base 0980 添加了 fdt-patch-dm-verify 工具依赖，
-    #     但该工具源文件在 autobuild 框架中，未随 25.12/files/ 提供。
-    #     BPI-R4 不使用 DM-verity secure boot，创建最小 stub 绕过构建。
+    # fdt-patch-dm-verify stub（BPI-R4 不使用 DM-verity secure boot）
     local stub_tool="${OPENWRT_ROOT}/tools/fdt-patch-dm-verify"
     if [ ! -f "$stub_tool/Makefile" ]; then
         mkdir -p "$stub_tool"
@@ -1028,8 +1049,10 @@ MKEOF
         } >> "${OPENWRT_ROOT}/tools/Makefile"
         log_info "Added fdt-patch-dm-verify to tools/Makefile"
     fi
+}
 
-    # ── 总结 ─────────────────────────────────────────────────────────
+# ── 阶段 6: 总结报告 ────────────────────────────────────────────────────
+stage_summary() {
     echo ""
     echo "============================================================================"
     echo "  MTK SDK Integration Summary"
@@ -1054,7 +1077,32 @@ MKEOF
         log_info "  No rejected hunks after patch application"
     fi
     echo "============================================================================"
+}
+
+# ── 主流程 ──────────────────────────────────────────────────────────────
+main() {
     echo ""
+    echo "============================================================================"
+    echo "  MTK SDK Integration for ImmortalWrt 25.12"
+    echo "  SDK: $MTK_SDK_URL ($MTK_SDK_BRANCH)"
+    echo "  Target: $OPENWRT_ROOT"
+    echo "  Mode: $([ "$DRY_RUN" = "1" ] && echo 'DRY-RUN (no changes)' || echo 'LIVE')"
+    echo "============================================================================"
+    echo ""
+
+    stage_init
+    log_step "Stage 1/6 — SDK overlay sync"
+    stage_overlay
+    log_step "Stage 2/6 — Post-overlay cleanup"
+    stage_cleanup
+    log_step "Stage 3/6 — Patch application"
+    stage_patches
+    log_step "Stage 4/6 — Kernel config & tool fixups"
+    stage_fixups
+    log_step "Stage 5/6 — Feed registration & finalization"
+    stage_finalize
+    log_step "Stage 6/6 — Summary"
+    stage_summary
 
     # 预扫描冲突是预期的（ImmortalWrt 与 OpenWrt 基线差异），不应阻断构建。
     # 真正需要关注的是应用阶段是否仍产生 [REJECTS]。

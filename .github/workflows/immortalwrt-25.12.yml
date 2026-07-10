@@ -1,4 +1,4 @@
-name: immortalwrt_25_12
+name: immortalwrt_25.12
 
 on:
   schedule:
@@ -122,6 +122,34 @@ jobs:
           echo "=== MTK SDK Skipped Patches ==="
           cat "${{ github.workspace }}/mtk-sdk-skipped-log.txt"
         fi
+
+    - name: Overlay autobuild kernel files
+      run: |
+        DEST="openwrt/target/linux/mediatek/files-6.12"
+        SRC="${{ env.MTK_SDK_DIR }}/autobuild/unified/global/logan_common/25.12/files/target/linux/mediatek/files-6.12"
+        if [ -d "$SRC" ]; then
+          cp -af "$SRC"/* "$DEST/" 2>/dev/null || true
+          echo "Autobuild overlay applied to $DEST"
+        fi
+
+        PATCH="${{ env.MTK_SDK_DIR }}/autobuild/unified/global/logan_common/25.12/files/target/linux/mediatek/patches-6.12/999-eth-93-mtk_eth_soc-add-internal-SER-notify-event.patch"
+        HDR="$DEST/drivers/net/ethernet/mediatek/mtk_eth_reset.h"
+        mkdir -p "$(dirname "$HDR")"
+        sed -n '/^diff.*mtk_eth_reset\.h$/,/^diff.*mtk_eth_soc\.c$/{/^+++/!s/^+//;/^diff.*mtk_eth_soc\.c$/d;p}' "$PATCH" | sed '1,/^@@/d' > "$HDR"
+        test -s "$HDR"
+        grep -q '^#define MTK_FE_START_RESET' "$HDR"
+        grep -q '^#define MTK_TOPS_DUMP_DONE' "$HDR"
+        echo "Extracted mtk_eth_reset.h ($(wc -l < "$HDR") lines)"
+
+    - name: Patch mtk_npu compile flags
+      run: |
+        NPU_HNAT_MK="${{ env.MTK_SDK_DIR }}/feed/kernel/mtk_npu/npu-nf_hnat.mk"
+        NPU_MK="${{ env.MTK_SDK_DIR }}/feed/kernel/mtk_npu/Makefile"
+        TARGET_MK="$NPU_HNAT_MK"
+        [ -f "$TARGET_MK" ] || TARGET_MK="$NPU_MK"
+        grep -q 'CONFIG_MEDIATEK_NETSYS_V3=y' "$TARGET_MK" || \
+          printf '\nEXTRA_KCONFIG += CONFIG_MEDIATEK_NETSYS_V3=y\n' >> "$TARGET_MK"
+        grep -n 'CONFIG_MEDIATEK_NETSYS_V3=y' "$TARGET_MK"
 
     - name: Update base feed indexes (incl. MTK feed)
       working-directory: ./openwrt

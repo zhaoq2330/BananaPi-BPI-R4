@@ -1,0 +1,80 @@
+# ============================================================================
+# Kconfig 自动 unset 规则 — 两段 pattern 列表
+# ============================================================================
+# 格式:
+#   [keep]   下一行起列出 BPI-R4 核心路径 symbol，不自动关闭
+#   [unset]  下一行起列出非 BPI-R4 泛平台/旧 switch symbol，自动设为 =n
+# 支持 shell glob: * 匹配任意字符
+#
+# 工作流程:
+#   1. scan_mtk_sdk_kconfig_symbols() 发现未配置的 symbol
+#   2. 先检查 [keep] pattern → 命中则跳过
+#   3. 再检查 [unset] pattern → 命中则加入 auto_unset
+#   4. 都不命中 → 加入 review 列表
+# ============================================================================
+
+[keep]
+# BPI-R4 核心路径 — 由 defconfig/packages 控制
+SFP
+MDIO_I2C
+FIXED_PHY
+PHYLINK
+PHYLIB
+SWPHY
+NET_DSA
+NET_DSA_MT7530*
+# MediaTek PCS / PHY 链
+PCS_MTK_*
+PHY_MTK_*
+# MediaTek 网络 / 加速子系统和 WiFi
+MTK_NETSYS*
+MTK_HNAT*
+MTK_PPE*
+MTK_WED*
+MT798*
+MT799*
+MT76*
+MEDIATEK_2P5GE_PHY
+# MediaTek 平台基础
+NVMEM_MTK_*
+PINCTRL_MTK_*
+PWM_MTK_*
+PCIE_MEDIATEK*
+ARCH_MEDIATEK
+ARM64
+
+[unset]
+# MxL862xx DSA switch — MTK SDK 为其他 RFB 引入
+NET_DSA_MXL862
+NET_DSA_TAG_MXL862*
+# 旧版 MTK / Broadcom switch 栈
+MT753X_GSW
+SWCONFIG
+SWCONFIG_B53_*
+# 外部 PHY / switch（Airoha, AN8855, ZTS）
+AIROHA_AN8801_PHY
+AIR_AN8811HB_PHY*
+AN8855_GSW
+ZTS8032
+ZTS8232
+# 其他平台专用
+MIKROTIK_*
+MTD_SPLIT_CFE_BOOTFS
+MTK_EMIMPU
+# 调试 / 非核心
+USB_XHCI_MTK_DEBUGFS
+# 旧 Broadcom / Qualcomm switch PHY
+ADM6996_PHY
+AR8216_PHY
+IP17XX_PHY
+PSB6970_PHY
+RTL8306_PHY
+RTL8366_SMI
+# 旧 DSA 驱动链
+NET_DSA_BCM_*
+NET_DSA_LOOP
+NET_DSA_LANTIQ_*
+NET_DSA_MV*
+NET_DSA_MSCC_*
+NET_DSA_AR9331
+NET_DSA_QCA8K*
