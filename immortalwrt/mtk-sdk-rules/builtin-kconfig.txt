@@ -14,3 +14,8 @@ MEDIATEK_2P5GE_PHY
 NETFILTER
 NF_CONNTRACK
 NF_FLOW_TABLE
+
+# mtk_hnat 驱动 — autobuild files-6.12 覆盖包含完整 HNAT 源码，
+# npu-mcast.ko 链接时需要 hnat_notify_mcast_{hw,sw}_path /
+# mtk_npu_hnat_mcast_ops_{register,unregister} 等符号
+NET_MEDIATEK_HNAT
