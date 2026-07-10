@@ -126,8 +126,7 @@ jobs:
         if grep -q 'KernelPackage/mediatek_hnat' "$NETDEV_MK" && \
            ! grep -q 'KERNEL_EXTRA_SYMBOLS.*:=.*1' "$NETDEV_MK"; then
           sed -i '/^define KernelPackage\/mediatek_hnat$/,/^endef$/{
-            /DEPENDS:=/a\
-  KERNEL_EXTRA_SYMBOLS:=1
+            /DEPENDS:=/a\  KERNEL_EXTRA_SYMBOLS:=1
           }' "$NETDEV_MK"
           echo "Added KERNEL_EXTRA_SYMBOLS:=1 to KernelPackage/mediatek_hnat"
           grep -A2 'KernelPackage/mediatek_hnat' "$NETDEV_MK" | head -5
