@@ -141,6 +141,16 @@ jobs:
         grep -q '^#define MTK_TOPS_DUMP_DONE' "$HDR"
         echo "Extracted mtk_eth_reset.h ($(wc -l < "$HDR") lines)"
 
+    - name: Patch mtk_npu compile flags
+      run: |
+        NPU_HNAT_MK="${{ env.MTK_SDK_DIR }}/feed/kernel/mtk_npu/npu-nf_hnat.mk"
+        NPU_MK="${{ env.MTK_SDK_DIR }}/feed/kernel/mtk_npu/Makefile"
+        TARGET_MK="$NPU_HNAT_MK"
+        [ -f "$TARGET_MK" ] || TARGET_MK="$NPU_MK"
+        grep -q 'CONFIG_MEDIATEK_NETSYS_V3=y' "$TARGET_MK" || \
+          printf '\nEXTRA_KCONFIG += CONFIG_MEDIATEK_NETSYS_V3=y\n' >> "$TARGET_MK"
+        grep -n 'CONFIG_MEDIATEK_NETSYS_V3=y' "$TARGET_MK"
+
     - name: Update base feed indexes (incl. MTK feed)
       working-directory: ./openwrt
       run: |
