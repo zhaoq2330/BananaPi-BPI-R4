@@ -151,6 +151,20 @@ jobs:
           printf '\nEXTRA_KCONFIG += CONFIG_MEDIATEK_NETSYS_V3=y\n' >> "$TARGET_MK"
         grep -n 'CONFIG_MEDIATEK_NETSYS_V3=y' "$TARGET_MK"
 
+    - name: Export HNAT symbols for NPU module linkage
+      run: |
+        NETDEV_MK="openwrt/package/kernel/linux/modules/netdevices.mk"
+        if grep -q 'KernelPackage/mediatek_hnat' "$NETDEV_MK" && \
+           ! grep -q 'KERNEL_EXTRA_SYMBOLS.*:=.*1' "$NETDEV_MK"; then
+          sed -i '/^define KernelPackage\/mediatek_hnat$/,/^endef$/{
+            /DEPENDS:=/a\
+  KERNEL_EXTRA_SYMBOLS:=1
+          }' "$NETDEV_MK"
+          echo "Added KERNEL_EXTRA_SYMBOLS:=1 to KernelPackage/mediatek_hnat"
+        else
+          echo "KERNEL_EXTRA_SYMBOLS already present or KernelPackage/mediatek_hnat not found"
+        fi
+
     - name: Update base feed indexes (incl. MTK feed)
       working-directory: ./openwrt
       run: |
