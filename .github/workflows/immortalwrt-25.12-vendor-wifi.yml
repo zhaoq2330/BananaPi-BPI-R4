@@ -98,7 +98,7 @@ jobs:
         PATCH="${{ env.MTK_SDK_DIR }}/autobuild/unified/global/logan_common/25.12/files/target/linux/mediatek/patches-6.12/999-eth-93-mtk_eth_soc-add-internal-SER-notify-event.patch"
         HDR="$DEST/drivers/net/ethernet/mediatek/mtk_eth_reset.h"
         mkdir -p "$(dirname "$HDR")"
-        sed -n '/^diff.*mtk_eth_reset\.h$/,/^diff.*mtk_eth_soc\.c$/{/^+[^+]/s/^+//;/^diff.*mtk_eth_soc\.c$/d;p}' "$PATCH" | sed '1,/^@@/d' > "$HDR"
+        sed -n '/^diff.*mtk_eth_reset\.h$/,/^diff.*mtk_eth_soc\.c$/{/^+++/!s/^+//;/^diff.*mtk_eth_soc\.c$/d;p}' "$PATCH" | sed '1,/^@@/d' > "$HDR"
         test -s "$HDR"
         grep -q '^#define MTK_FE_START_RESET' "$HDR"
         grep -q '^#define MTK_TOPS_DUMP_DONE' "$HDR"
