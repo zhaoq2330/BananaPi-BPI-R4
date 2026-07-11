@@ -57,7 +57,7 @@ load_rule_file() {
         case "$line" in
             ''|'#'*) continue ;;
         esac
-        printf '%s\n' "$line"
+        printf '%s\n' "$line" 2>/dev/null || true
     done < "$rule_file"
 }
 
