@@ -778,6 +778,16 @@ patch_mtk_feed_build_fixes() {
         sed -i 's/cmake_minimum_required(VERSION 2\.8)/cmake_minimum_required(VERSION 3.5)/' "$mt76_cmake"
         log_info "Ensured mt76-vendor CMake minimum version compatibility"
     fi
+
+    # 999-hnat-14/15 add ndo_flow_offload_stats64_add to vlan/ppp netdev ops
+    # but NOT to base net_device_ops.  Kernel 6.12 dropped this private hook;
+    # comment out the debugfs caller so stats update degrades gracefully.
+    local hnat_debugfs="${OPENWRT_ROOT}/target/linux/mediatek/files-6.12/drivers/net/ethernet/mediatek/mtk_hnat/hnat_debugfs.c"
+    if [ -f "$hnat_debugfs" ] && grep -q 'ndo_flow_offload_stats64_add' "$hnat_debugfs"; then
+        sed -i 's|^\(\t*\)\(if.*->ndo_flow_offload_stats64_add\)|\1/* \2 */|' "$hnat_debugfs"
+        sed -i 's|^\(\t*\)\(dev->netdev_ops->ndo_flow_offload_stats64_add\)|\1/* \2 */|' "$hnat_debugfs"
+        log_info "Commented out ndo_flow_offload_stats64_add caller in hnat_debugfs.c for 6.12"
+    fi
 }
 
 add_mtk_feed() {
@@ -1004,6 +1014,7 @@ overlay_autobuild_kernel_files() {
         copied=0
         for patch in \
             999-eth-91-mtk_eth_soc-add-mtkhnat-driver-support.patch \
+            999-net-04-netdevice-add-ndo_flow_offload_stats64_add-for-offload-stats-correction.patch \
             999-hnat-02-mtk_eth_soc-add-support-ppe-flow-check-interrupt.patch \
             999-hnat-03-netfilter-nf_flow_table-support-hw-offload-through-v.patch \
             999-hnat-04-net-8021q-support-hardware-flow-table-offload.patch \
