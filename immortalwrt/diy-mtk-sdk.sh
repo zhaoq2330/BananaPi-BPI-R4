@@ -947,6 +947,84 @@ MKEOF
 }
 
 # ── 阶段 0: 初始化 ────────────────────────────────────────────────────
+overlay_autobuild_kernel_files() {
+    local dest="$OPENWRT_ROOT/target/linux/mediatek/files-6.12"
+    local src="$MTK_SDK_DIR/autobuild/unified/global/logan_common/25.12/files/target/linux/mediatek/files-6.12"
+    local patch_src="$MTK_SDK_DIR/autobuild/unified/global/logan_common/25.12/files/target/linux/mediatek/patches-6.12"
+    local patch_dst="$OPENWRT_ROOT/target/linux/mediatek/patches-6.12"
+    local patch hdr copied
+
+    log_step "Overlaying autobuild HNAT/NPU kernel files"
+
+    if [ -d "$src" ]; then
+        mkdir -p "$dest"
+        cp -af "$src"/. "$dest/" 2>/dev/null || true
+        log_info "Autobuild kernel files overlaid to $dest"
+    else
+        log_warn "Autobuild files-6.12 directory missing: $src"
+    fi
+
+    if [ -d "$patch_src" ]; then
+        mkdir -p "$patch_dst"
+        copied=0
+        for patch in \
+            999-eth-91-mtk_eth_soc-add-mtkhnat-driver-support.patch \
+            999-hnat-02-mtk_eth_soc-add-support-ppe-flow-check-interrupt.patch \
+            999-hnat-03-netfilter-nf_flow_table-support-hw-offload-through-v.patch \
+            999-hnat-04-net-8021q-support-hardware-flow-table-offload.patch \
+            999-hnat-05-net-bridge-support-hardware-flow-table-offload.patch \
+            999-hnat-06-net-pppoe-support-hardware-flow-table-offload.patch \
+            999-hnat-07-net-dsa-support-hardware-flow-table-offload.patch \
+            999-hnat-08-net-macvlan-support-hardware-flow-table-offload.patch \
+            999-hnat-09-mtkhnat-add-support-for-virtual-interface-acceleration.patch \
+            999-hnat-11-net-ipv4-support-frag-gso-skb-headroom-copy.patch \
+            999-hnat-12-net-core-skbuff-ipv6-fix-pskb-expand-head-limitation.patch \
+            999-hnat-13-mtkhnat-refactor-mtk-headroom-copy.patch \
+            999-hnat-14-net-vlan-add-ndo_flow_offload_stats64_add-for-offload-stats-correction.patch \
+            999-hnat-15-ppp-add-ndo_flow_offload_stats64_add-for-offload-stats-correction.patch \
+            999-tnl-01-mtk-tunnel-offload-support.patch \
+            999-tnl-02-mtk-gre-offload-support.patch \
+            999-tnl-04-mtk-vxlan-offload-support.patch \
+            999-tnl-06-mtk-pptp-offload-support.patch \
+            999-tnl-90-mtk-l2tp-offload-support.patch; do
+            if [ -f "$patch_src/$patch" ]; then
+                cp -f "$patch_src/$patch" "$patch_dst/$patch"
+                copied=$((copied + 1))
+            else
+                log_warn "Autobuild patch missing: $patch"
+            fi
+        done
+
+        cat > "$patch_dst/999-net-03-netdevice-add-tnl-device-path-type.patch" <<'PATCH'
+--- a/include/linux/netdevice.h
++++ b/include/linux/netdevice.h
+@@ -838,2 +838,5 @@ enum net_device_path_type {
+ 	DEV_PATH_MACVLAN,
++	DEV_PATH_DSLITE,
++	DEV_PATH_6RD,
++	DEV_PATH_TNL,
+ 	DEV_PATH_MTK_WDMA,
+PATCH
+        log_info "Autobuild HNAT/NPU kernel patches overlaid to $patch_dst ($copied copied + local netdevice fix)"
+    else
+        log_warn "Autobuild patches-6.12 directory missing: $patch_src"
+    fi
+
+    patch="$patch_src/999-eth-93-mtk_eth_soc-add-internal-SER-notify-event.patch"
+    hdr="$dest/drivers/net/ethernet/mediatek/mtk_eth_reset.h"
+    if [ -f "$patch" ]; then
+        mkdir -p "$(dirname "$hdr")"
+        sed -n '/^diff.*mtk_eth_reset\.h$/,/^diff.*mtk_eth_soc\.c$/{/^+++/!s/^+//;/^diff.*mtk_eth_soc\.c$/d;p}' "$patch" | \
+            sed '1,/^@@/d' > "$hdr"
+        test -s "$hdr"
+        grep -q '^#define MTK_FE_START_RESET' "$hdr"
+        grep -q '^#define MTK_TOPS_DUMP_DONE' "$hdr"
+        log_info "Extracted mtk_eth_reset.h ($(wc -l < "$hdr") lines)"
+    else
+        log_warn "Cannot extract mtk_eth_reset.h; patch missing: $patch"
+    fi
+}
+
 stage_init() {
     echo "# MTK SDK Integration Log — $(date)" > "$CONFLICT_LOG"
     echo "# MTK SDK Applied Patches — $(date)" > "$APPLIED_LOG"
@@ -988,6 +1066,8 @@ stage_cleanup() {
     # 移除不适用于 BPI-R4 的 MTK SDK overlay 产物
     remove_mtk_fstools_overlay_patches
     remove_mtk_listed_conflicts
+
+    overlay_autobuild_kernel_files
 
     # 复写后归一化 + 验证 SFP 补丁
     remove_broken_sfp_612_patches
