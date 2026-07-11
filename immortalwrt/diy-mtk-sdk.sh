@@ -998,11 +998,13 @@ overlay_autobuild_kernel_files() {
         mkdir -p "$dest"
         cp -af "$src"/. "$dest/" 2>/dev/null || true
 
-        # Autobuild files-6.12 may include build-system files designed for
-        # MTK's own kernel tree. Keep the HNAT subdir Makefile, which is
-        # required by the 999-eth-91 parent Makefile patch, and strip any
-        # other copied Kbuild/Kconfig files that could override ImmortalWrt.
-        local cleaned=0
+        # Autobuild files-6.12 is the MTK SDK's own kernel tree overlay.
+        # It may contain source subtrees that duplicate the kernel's own
+        # compiled objects, causing "exported twice" modpost errors. Keep
+        # mediatek driver sources and exported headers only.
+        local cleaned_mf=0 cleaned_dir=0
+
+        # ── 1. Remove Makefile/Kbuild/Kconfig, keep mtk_hnat/Makefile ──
         while IFS= read -r -d '' mf; do
             case "$mf" in
                 */drivers/net/ethernet/mediatek/mtk_hnat/Makefile)
@@ -1010,9 +1012,24 @@ overlay_autobuild_kernel_files() {
                     ;;
             esac
             rm -f "$mf"
-            cleaned=$((cleaned + 1))
+            cleaned_mf=$((cleaned_mf + 1))
         done < <(find "$dest" -type f \( -name 'Makefile' -o -name 'Kbuild' -o -name 'Kconfig' \) -print0 2>/dev/null || true)
-        [ "$cleaned" -gt 0 ] && log_warn "Removed $cleaned non-HNAT Makefile/Kbuild/Kconfig files from autobuild files-6.12 overlay"
+
+        # ── 2. Remove subtrees that shadow the kernel's own source ──
+        # Whitelist: drivers/ for HNAT sources, include/ for ra_nat.h.
+        # Blacklist: net/, arch/, kernel/, lib/, mm/, security/,
+        # sound/, scripts/, tools/, usr/, crypto/, block/, ipc/, init/, virt/.
+        for dir in "$dest"/*/; do
+            dir="${dir%/}"
+            case "$(basename "$dir")" in
+                drivers|include) continue ;;
+            esac
+            rm -rf "$dir"
+            cleaned_dir=$((cleaned_dir + 1))
+        done
+
+        [ "$cleaned_mf" -gt 0 ] && log_warn "Removed $cleaned_mf non-HNAT Makefile/Kbuild/Kconfig files"
+        [ "$cleaned_dir" -gt 0 ] && log_warn "Removed $cleaned_dir compiled kernel subtrees from autobuild files-6.12 overlay (kept drivers/include)"
 
         log_info "Autobuild kernel files overlaid to $dest"
     else
