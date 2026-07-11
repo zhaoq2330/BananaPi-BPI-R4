@@ -997,6 +997,23 @@ overlay_autobuild_kernel_files() {
     if [ -d "$src" ]; then
         mkdir -p "$dest"
         cp -af "$src"/. "$dest/" 2>/dev/null || true
+
+        # Autobuild files-6.12 may include build-system files designed for
+        # MTK's own kernel tree. Keep the HNAT subdir Makefile, which is
+        # required by the 999-eth-91 parent Makefile patch, and strip any
+        # other copied Kbuild/Kconfig files that could override ImmortalWrt.
+        local cleaned=0
+        while IFS= read -r -d '' mf; do
+            case "$mf" in
+                */drivers/net/ethernet/mediatek/mtk_hnat/Makefile)
+                    continue
+                    ;;
+            esac
+            rm -f "$mf"
+            cleaned=$((cleaned + 1))
+        done < <(find "$dest" -type f \( -name 'Makefile' -o -name 'Kbuild' -o -name 'Kconfig' \) -print0 2>/dev/null || true)
+        [ "$cleaned" -gt 0 ] && log_warn "Removed $cleaned non-HNAT Makefile/Kbuild/Kconfig files from autobuild files-6.12 overlay"
+
         log_info "Autobuild kernel files overlaid to $dest"
     else
         log_warn "Autobuild files-6.12 directory missing: $src"
