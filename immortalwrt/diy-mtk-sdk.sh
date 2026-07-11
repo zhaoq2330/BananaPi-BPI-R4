@@ -1012,34 +1012,19 @@ overlay_autobuild_kernel_files() {
     if [ -d "$patch_src" ]; then
         mkdir -p "$patch_dst"
         copied=0
-        for patch in \
-            999-eth-91-mtk_eth_soc-add-mtkhnat-driver-support.patch \
-            999-net-04-netdevice-add-ndo_flow_offload_stats64_add-for-offload-stats-correction.patch \
-            999-hnat-02-mtk_eth_soc-add-support-ppe-flow-check-interrupt.patch \
-            999-hnat-03-netfilter-nf_flow_table-support-hw-offload-through-v.patch \
-            999-hnat-04-net-8021q-support-hardware-flow-table-offload.patch \
-            999-hnat-05-net-bridge-support-hardware-flow-table-offload.patch \
-            999-hnat-06-net-pppoe-support-hardware-flow-table-offload.patch \
-            999-hnat-07-net-dsa-support-hardware-flow-table-offload.patch \
-            999-hnat-08-net-macvlan-support-hardware-flow-table-offload.patch \
-            999-hnat-09-mtkhnat-add-support-for-virtual-interface-acceleration.patch \
-            999-hnat-11-net-ipv4-support-frag-gso-skb-headroom-copy.patch \
-            999-hnat-12-net-core-skbuff-ipv6-fix-pskb-expand-head-limitation.patch \
-            999-hnat-13-mtkhnat-refactor-mtk-headroom-copy.patch \
-            999-hnat-14-net-vlan-add-ndo_flow_offload_stats64_add-for-offload-stats-correction.patch \
-            999-hnat-15-ppp-add-ndo_flow_offload_stats64_add-for-offload-stats-correction.patch \
-            999-tnl-01-mtk-tunnel-offload-support.patch \
-            999-tnl-02-mtk-gre-offload-support.patch \
-            999-tnl-04-mtk-vxlan-offload-support.patch \
-            999-tnl-06-mtk-pptp-offload-support.patch \
-            999-tnl-90-mtk-l2tp-offload-support.patch; do
-            if [ -f "$patch_src/$patch" ]; then
-                cp -f "$patch_src/$patch" "$patch_dst/$patch"
-                copied=$((copied + 1))
-            else
-                log_warn "Autobuild patch missing: $patch"
-            fi
-        done
+        local patches_file; patches_file=$(rule_path "autobuild-patches.txt")
+        if [ -f "$patches_file" ]; then
+            while IFS= read -r patch; do
+                if [ -f "$patch_src/$patch" ]; then
+                    cp -f "$patch_src/$patch" "$patch_dst/$patch"
+                    copied=$((copied + 1))
+                else
+                    log_warn "Autobuild patch missing: $patch"
+                fi
+            done < <(load_rule_file "$patches_file")
+        else
+            log_warn "Autobuild patch whitelist not found: autobuild-patches.txt"
+        fi
 
         cat > "$patch_dst/999-net-03-netdevice-add-tnl-device-path-type.patch" <<'PATCH'
 --- a/include/linux/netdevice.h
