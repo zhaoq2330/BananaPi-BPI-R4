@@ -745,6 +745,41 @@ TARGETEOF
 }
 
 # ── 第五步：添加 MTK feed 源 ────────────────────────────────────────────
+patch_mtk_feed_build_fixes() {
+    local npu_hnat_mk="$MTK_SDK_DIR/feed/kernel/mtk_npu/npu-nf_hnat.mk"
+    local npu_mk="$MTK_SDK_DIR/feed/kernel/mtk_npu/Makefile"
+    local target_mk="$npu_hnat_mk"
+    local mt76_cmake="$MTK_SDK_DIR/feed/app/mt76-vendor/src/CMakeLists.txt"
+
+    log_step "Patching MTK feed build fixups"
+
+    [ -f "$target_mk" ] || target_mk="$npu_mk"
+    if [ -f "$target_mk" ]; then
+        grep -q 'CONFIG_MEDIATEK_NETSYS_V3=y' "$target_mk" || \
+            printf '\nEXTRA_KCONFIG += CONFIG_MEDIATEK_NETSYS_V3=y\n' >> "$target_mk"
+        log_info "Ensured mtk_npu NETSYS_V3 flag in $target_mk"
+    else
+        log_warn "mtk_npu Makefile not found, skipping NETSYS_V3 flag"
+    fi
+
+    if [ -f "$npu_mk" ] && grep -q 'define Build/Compile' "$npu_mk" && \
+       ! grep -q 'LINUX_DIR)/Module.symvers' "$npu_mk"; then
+        sed -i '/^define Build\/Compile/,/^endef$/{
+            /M="\$(PKG_BUILD_DIR)"/a\\		KBUILD_EXTRA_SYMBOLS="\$(KBUILD_EXTRA_SYMBOLS) \$(LINUX_DIR)/Module.symvers" \\
+        }' "$npu_mk"
+        log_info "Injected kernel Module.symvers into mtk_npu Build/Compile"
+    elif [ -f "$npu_mk" ]; then
+        log_info "mtk_npu Module.symvers injection already present or not needed"
+    else
+        log_warn "mtk_npu Makefile not found, skipping Module.symvers injection"
+    fi
+
+    if [ -f "$mt76_cmake" ]; then
+        sed -i 's/cmake_minimum_required(VERSION 2\.8)/cmake_minimum_required(VERSION 3.5)/' "$mt76_cmake"
+        log_info "Ensured mt76-vendor CMake minimum version compatibility"
+    fi
+}
+
 add_mtk_feed() {
     local feeds_conf="${OPENWRT_ROOT}/feeds.conf.default"
     
@@ -1094,6 +1129,7 @@ stage_fixups() {
 # ── 阶段 5: Feed 注册与收尾 ─────────────────────────────────────────────
 stage_finalize() {
     add_mtk_feed
+    patch_mtk_feed_build_fixes
 
     # fdt-patch-dm-verify stub（BPI-R4 不使用 DM-verity secure boot）
     local stub_tool="${OPENWRT_ROOT}/tools/fdt-patch-dm-verify"
