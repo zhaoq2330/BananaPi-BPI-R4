@@ -1,21 +1,18 @@
 # ============================================================================
-# 内核 Kconfig 符号 — 强制设为 =y (built-in)
-# 格式: <CONFIG_SYMBOL>
-# 原因: MTK SDK patches-base 修改了内核树，使 PPE/ethernet driver
-#       引用了 netfilter flow offload 符号。如果这些符号是 =m 而
-#       ethernet driver 是 built-in，则 vmlinux 链接失败。
+# Kernel Kconfig symbols forced to built-in (=y).
+# Format: <CONFIG_SYMBOL>
 # ============================================================================
 
-# BPI-R4 内置 2.5G PHY 驱动（对应 kmod-mt798x-2p5g-phy）
+# BPI-R4 onboard 2.5G PHY driver.
 MEDIATEK_2P5GE_PHY
 
-# PPE flow offload 依赖 — mtk_ppe.c / mtk_ppe_offload.c 在 built-in 中
-# 调用了 nf_conntrack_find_get / nf_ct_destroy / flow_offload_teardown_by_tuple
+# PPE flow offload dependencies used by built-in MediaTek ethernet code.
 NETFILTER
 NF_CONNTRACK
 NF_FLOW_TABLE
 
-# mtk_hnat 驱动 — autobuild files-6.12 覆盖包含完整 HNAT 源码，
-# npu-mcast.ko 链接时需要 hnat_notify_mcast_{hw,sw}_path /
-# mtk_npu_hnat_mcast_ops_{register,unregister} 等符号
+# HNAT must provide symbols required by NPU modules.
 NET_MEDIATEK_HNAT
+
+# MT7988 / NETSYS v3 HNAT path.
+MEDIATEK_NETSYS_V3
