@@ -87,36 +87,6 @@ jobs:
           cat "${{ github.workspace }}/mtk-sdk-skipped-log.txt"
         fi
 
-    - name: Patch mtk_npu compile flags
-      run: |
-        NPU_HNAT_MK="${{ env.MTK_SDK_DIR }}/feed/kernel/mtk_npu/npu-nf_hnat.mk"
-        NPU_MK="${{ env.MTK_SDK_DIR }}/feed/kernel/mtk_npu/Makefile"
-        TARGET_MK="$NPU_HNAT_MK"
-        [ -f "$TARGET_MK" ] || TARGET_MK="$NPU_MK"
-        grep -q 'CONFIG_MEDIATEK_NETSYS_V3=y' "$TARGET_MK" || \
-          printf '\nEXTRA_KCONFIG += CONFIG_MEDIATEK_NETSYS_V3=y\n' >> "$TARGET_MK"
-        grep -n 'CONFIG_MEDIATEK_NETSYS_V3=y' "$TARGET_MK"
-
-    - name: Fix mt76-vendor cmake version
-      run: |
-        F="${{ env.MTK_SDK_DIR }}/feed/app/mt76-vendor/src/CMakeLists.txt"
-        sed -i 's/cmake_minimum_required(VERSION 2\.8)/cmake_minimum_required(VERSION 3.5)/' "$F"
-        grep cmake_minimum_required "$F"
-
-    - name: Export HNAT symbols for NPU module linkage
-      run: |
-        NPU_MK="${{ env.MTK_SDK_DIR }}/feed/kernel/mtk_npu/Makefile"
-        if grep -q 'define Build/Compile' "$NPU_MK" && \
-           ! grep -q 'LINUX_DIR)/Module.symvers' "$NPU_MK"; then
-          sed -i '/^define Build\/Compile/,/^endef$/{
-            /M="\$(PKG_BUILD_DIR)"/a\\		KBUILD_EXTRA_SYMBOLS="\$(KBUILD_EXTRA_SYMBOLS) \$(LINUX_DIR)/Module.symvers" \\
-          }' "$NPU_MK"
-          echo "Injected kernel Module.symvers into NPU Build/Compile"
-          sed -n '/^define Build\/Compile/,/^endef$/p' "$NPU_MK"
-        else
-          echo "HNAT symvers already present or NPU Makefile not found"
-        fi
-
     - name: Update base feed indexes
       working-directory: ./openwrt
       run: |
