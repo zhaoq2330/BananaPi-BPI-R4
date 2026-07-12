@@ -674,6 +674,12 @@ $(load_rule_file "$(rule_path "builtin-kconfig.txt")")
         while IFS= read -r symbol; do
             [ -n "$symbol" ] || continue
             is_symbol_configured "$symbol" && continue
+            # Symbols in the static unset list (unset-kconfig.txt) are
+            # already handled by ensure_unset_symbol() below; skip them
+            # here to avoid false "needs review" warnings.
+            if echo "$kconfig_unset_symbols" | grep -qxF "$symbol" 2>/dev/null; then
+                continue
+            fi
             if should_auto_unset_kconfig_symbol "$symbol"; then
                 printf '%s\n' "$symbol" >> "$auto_unset_file"
             else
