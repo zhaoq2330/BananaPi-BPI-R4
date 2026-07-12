@@ -59,21 +59,35 @@ else
 fi
 
 log "Extracting mtk_eth_reset.h..."
-patch_src="${MTK_SDK_DIR}/autobuild/unified/global/logan_common/25.12/files/target/linux/mediatek/patches-6.12"
-patch="${patch_src}/999-eth-93-mtk_eth_soc-add-internal-SER-notify-event.patch"
 hdr="${files_dst}/drivers/net/ethernet/mediatek/mtk_eth_reset.h"
+
+# 策略1: 从 MTK SDK 原始 patch 提取
+patch_sdk="${MTK_SDK_DIR}/autobuild/unified/global/logan_common/25.12/files/target/linux/mediatek/patches-6.12"
+patch="${patch_sdk}/999-eth-93-mtk_eth_soc-add-internal-SER-notify-event.patch"
+
+# 策略2: autobuild 已将 patch 应用到 OpenWrt 树
+patch_owrt="${OPENWRT_ROOT}/target/linux/mediatek/patches-6.12/999-eth-93"*
+
+found=""
 if [ -f "$patch" ]; then
+    found="$patch"
+    log "  Found in MTK SDK"
+elif [ -n "$(ls $patch_owrt 2>/dev/null)" ]; then
+    found="$(ls $patch_owrt 2>/dev/null | head -1)"
+    log "  Found in OpenWrt tree: $(basename "$found")"
+fi
+
+if [ -n "$found" ]; then
     mkdir -p "$(dirname "$hdr")"
-    sed -n '/^diff.*mtk_eth_reset\.h$/,/^diff --git /{/^+++/!s/^+//;/^diff --git /d;p}' "$patch" | \
+    sed -n '/^diff.*mtk_eth_reset\.h$/,/^diff --git /{/^+++/!s/^+//;/^diff --git /d;p}' "$found" | \
         sed '1,/^@@/d' > "$hdr"
     if [ -s "$hdr" ] && grep -q 'MTK_FE_START_RESET' "$hdr"; then
         log "  Extracted ($(wc -l < "$hdr") lines)"
     else
-        warn "Extraction produced empty or invalid file"
+        warn "Extraction produced empty or invalid file, header may be missing"
     fi
 else
-    warn "999-eth-93 patch not found"
-    exit 1
+    warn "999-eth-93 patch not found in SDK or OpenWrt tree - NPU build may fail"
 fi
 
 log "All fixups complete."
