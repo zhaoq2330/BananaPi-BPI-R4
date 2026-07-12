@@ -1,4 +1,4 @@
-name: immortalwrt_25.12_vendor_wifi
+name: openwrt_25.12_vendor_wifi
 
 on:
   workflow_dispatch:
@@ -8,10 +8,9 @@ permissions:
   contents: write
 
 env:
-  REPO_URL: https://github.com/immortalwrt/immortalwrt
+  REPO_URL: https://github.com/openwrt/openwrt
   REPO_BRANCH: openwrt-25.12
   CONFIG_FILE: immortalwrt/MTK/defconfig-vendor-wifi
-  DIY_P0_SH: immortalwrt/diy-mtk-sdk.sh
   UPLOAD_FIRMWARE: true
   TZ: Asia/Shanghai
   OPENWRT_NAME: immortalwrt
@@ -67,25 +66,10 @@ jobs:
         git clone --depth=1 --branch "${{ env.MTK_SDK_BRANCH }}" "${{ env.MTK_SDK_URL }}" "$MTK_SDK_DIR"
         echo "MTK_SDK_DIR=$MTK_SDK_DIR" >> $GITHUB_ENV
 
-    - name: Apply MTK SDK patches and files
+    - name: Prepare SDK with autobuild (filogic platform)
+      working-directory: ./openwrt
       run: |
-        chmod +x $OPENWRT_NAME/*.sh
-        cd openwrt
-        export MTK_SDK_DIR="${{ env.MTK_SDK_DIR }}"
-        export GITHUB_WORKSPACE="${{ github.workspace }}"
-        $GITHUB_WORKSPACE/$DIY_P0_SH
-
-    - name: Show MTK SDK conflict report
-      if: always()
-      run: |
-        if [ -f "${{ github.workspace }}/mtk-sdk-conflict-log.txt" ]; then
-          echo "=== MTK SDK Conflict Report ==="
-          cat "${{ github.workspace }}/mtk-sdk-conflict-log.txt"
-        fi
-        if [ -f "${{ github.workspace }}/mtk-sdk-skipped-log.txt" ]; then
-          echo "=== MTK SDK Skipped Patches ==="
-          cat "${{ github.workspace }}/mtk-sdk-skipped-log.txt"
-        fi
+        bash ../mtk-openwrt-feeds/autobuild/unified/autobuild.sh filogic prepare log_file=make
 
     - name: Update base feed indexes
       working-directory: ./openwrt
