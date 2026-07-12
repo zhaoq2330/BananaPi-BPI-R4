@@ -10,7 +10,6 @@ permissions:
 env:
   REPO_URL: https://git.openwrt.org/openwrt/openwrt.git
   REPO_BRANCH: openwrt-25.12
-  OPENWRT_COMMIT: 8a18e84a887379db8954449a9fabe6df54084dea
   CONFIG_FILE: immortalwrt/MTK/defconfig-vendor-wifi
   UPLOAD_FIRMWARE: true
   TZ: Asia/Shanghai
@@ -54,9 +53,6 @@ jobs:
     - name: Download firmware source code
       run: |
         git clone --depth 1 $REPO_URL -b $REPO_BRANCH openwrt
-        cd openwrt
-        git fetch --depth 1 origin $OPENWRT_COMMIT
-        git checkout $OPENWRT_COMMIT
 
     - name: Restore toolchain cache
       uses: klever1988/cachewrtbuild@54ed4fe2f7d8b5cfbc0b928c159266ee892c2d3d
