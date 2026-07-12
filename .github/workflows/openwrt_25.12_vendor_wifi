@@ -8,12 +8,13 @@ permissions:
   contents: write
 
 env:
-  REPO_URL: https://github.com/openwrt/openwrt
+  REPO_URL: https://git.openwrt.org/openwrt/openwrt.git
   REPO_BRANCH: openwrt-25.12
+  OPENWRT_COMMIT: 8a18e84a887379db8954449a9fabe6df54084dea
   CONFIG_FILE: immortalwrt/MTK/defconfig-vendor-wifi
   UPLOAD_FIRMWARE: true
   TZ: Asia/Shanghai
-  OPENWRT_NAME: immortalwrt
+  OPENWRT_NAME: openwrt-mtk
   OPENWRT_DEVICE: mediatek
   MTK_SDK_URL: https://github.com/mediatek/mtk-openwrt-feeds.git
   MTK_SDK_BRANCH: main
@@ -41,8 +42,9 @@ jobs:
         DEBIAN_FRONTEND: noninteractive
       run: |
         ( sudo -E apt-get -qq update
-        sudo -E apt-get -qq install build-essential clang flex g++ gawk gcc-multilib gettext \
-        git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev swig libpython3-dev aria2 jq subversion qemu-utils ccache rename libelf-dev
+        sudo -E apt-get -qq install build-essential clang flex bison g++ gawk gcc-multilib gettext \
+        git libncurses5-dev libssl-dev python3-distutils python3-setuptools rsync swig unzip zlib1g-dev file wget \
+        libpython3-dev aria2 jq subversion qemu-utils ccache rename libelf-dev
         sudo -E apt-get -qq purge azure-cli ghc* zulu* hhvm llvm* firefox powershell openjdk* dotnet* google* mysql* php* android* rename speedtest-cli
         sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
         sudo -E apt-get -qq autoremove --purge
@@ -52,6 +54,9 @@ jobs:
     - name: Download firmware source code
       run: |
         git clone --depth 1 $REPO_URL -b $REPO_BRANCH openwrt
+        cd openwrt
+        git fetch --depth 1 origin $OPENWRT_COMMIT
+        git checkout $OPENWRT_COMMIT
 
     - name: Restore toolchain cache
       uses: klever1988/cachewrtbuild@54ed4fe2f7d8b5cfbc0b928c159266ee892c2d3d
@@ -70,37 +75,6 @@ jobs:
       working-directory: ./openwrt
       run: |
         bash ../mtk-openwrt-feeds/autobuild/unified/autobuild.sh filogic prepare log_file=make
-
-    - name: Update base feed indexes
-      working-directory: ./openwrt
-      run: |
-        ./scripts/feeds update -a
-
-    - name: Install base and MTK feed packages
-      working-directory: ./openwrt
-      run: |
-        fix_flowtable_dep() {
-          for flowtable_mk in \
-            "${{ env.MTK_SDK_DIR }}/feed/flowtable/Makefile" \
-            "${{ env.MTK_SDK_DIR }}/feed/kernel/flowtable/Makefile" \
-            feeds/mtk_openwrt_feed/flowtable/Makefile \
-            feeds/mtk_openwrt_feed/kernel/flowtable/Makefile \
-            package/feeds/mtk_openwrt_feed/flowtable/Makefile; do
-            [ -f "$flowtable_mk" ] && sed -i -E 's/[[:space:]]*\+?kmod-nf-flow-netlink//g' "$flowtable_mk"
-          done
-
-          for dep_file in \
-            $(find "${{ env.MTK_SDK_DIR }}/feed" feeds/mtk_openwrt_feed package/feeds/mtk_openwrt_feed tmp/info \
-              -type f 2>/dev/null | xargs grep -l 'kmod-nf-flow-netlink' 2>/dev/null || true); do
-            sed -i -E 's/[[:space:]]*\+?kmod-nf-flow-netlink//g' "$dep_file"
-          done
-        }
-
-        fix_flowtable_dep
-        ./scripts/feeds update mtk_openwrt_feed >/dev/null 2>&1 || true
-        fix_flowtable_dep
-        ./scripts/feeds install -a
-        fix_flowtable_dep
 
     - name: Load config
       run: |
