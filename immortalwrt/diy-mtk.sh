@@ -48,19 +48,14 @@ for mk in "${OPENWRT_ROOT}/target/linux/mediatek/filogic/target.mk" \
     fi
 done
 
-# ── 3. CMake fix for mt76-vendor ───────────────────────────────────────
-log "Fixing mt76-vendor CMake compatibility..."
+# ── 3. CMake compatibility for mt76-vendor ────────────────────────────
+# mt76-vendor's CMakeLists.txt declares cmake_minimum_required(VERSION 2.8).
+# Modern CMake (≥3.5) rejects this.  Set the policy variable so CMake
+# accepts the legacy declaration without modifying upstream source.
+log "Enabling CMake policy compatibility..."
 
-cmake_list="${MTK_SDK_DIR}/feed/app/mt76-vendor/CMakeLists.txt"
-if [ -f "$cmake_list" ]; then
-    if grep -q 'VERSION 2\.8' "$cmake_list"; then
-        sed -i 's/cmake_minimum_required(VERSION 2\.8)/cmake_minimum_required(VERSION 3.5)/' "$cmake_list"
-        log "  Patched cmake_minimum_required: 2.8 → 3.5"
-    else
-        log "  CMake version already ≥ 3.5"
-    fi
-else
-    warn "CMakeLists.txt not found: $cmake_list"
-fi
+export CMAKE_POLICY_VERSION_MINIMUM=3.5
+echo "CMAKE_POLICY_VERSION_MINIMUM=3.5" >> "${GITHUB_ENV:-/dev/null}" 2>/dev/null || true
+log "  CMAKE_POLICY_VERSION_MINIMUM=3.5 (set for all subsequent steps)"
 
 log "All fixups complete."
