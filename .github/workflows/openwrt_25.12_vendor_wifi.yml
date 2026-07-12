@@ -17,6 +17,8 @@ env:
   OPENWRT_DEVICE: mediatek
   MTK_SDK_URL: https://github.com/mediatek/mtk-openwrt-feeds.git
   MTK_SDK_BRANCH: main
+  DIY_FIXUP_SH: immortalwrt/diy-mtk.sh
+  MTK_SDK_BRANCH: main
 
 jobs:
   build:
@@ -72,21 +74,13 @@ jobs:
       run: |
         bash ../mtk-openwrt-feeds/autobuild/unified/autobuild.sh filogic prepare log_file=make
 
-    - name: Pin new kernel Kconfig symbols
-      working-directory: ./openwrt
+    - name: Apply post-autobuild fixups
       run: |
-        config_file="target/linux/mediatek/filogic/config-6.12"
-        if ! grep -q '^# CONFIG_MEDIATEK_2P5GE_PHY is not set$' "$config_file"; then
-          echo '# CONFIG_MEDIATEK_2P5GE_PHY is not set' >> "$config_file"
-        fi
-        cat > target/linux/mediatek/filogic/kconfig-allnoconfig <<'EOF'
-        EOF
-        for mk in target/linux/mediatek/filogic/target.mk \
-                 target/linux/mediatek/filogic_a73/target.mk; do
-          if [ -f "$mk" ] && ! grep -q 'KCONFIG_ALLCONFIG' "$mk"; then
-            echo 'export KCONFIG_ALLCONFIG := $(TOPDIR)/target/linux/mediatek/filogic/kconfig-allnoconfig' >> "$mk"
-          fi
-        done
+        chmod +x $OPENWRT_NAME/*.sh
+        cd openwrt
+        export MTK_SDK_DIR="${{ env.MTK_SDK_DIR }}"
+        export OPENWRT_ROOT="$(pwd)"
+        $GITHUB_WORKSPACE/$DIY_FIXUP_SH
 
     - name: Load config
       run: |
