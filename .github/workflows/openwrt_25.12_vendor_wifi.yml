@@ -10,10 +10,10 @@ permissions:
 env:
   REPO_URL: https://git.openwrt.org/openwrt/openwrt.git
   REPO_BRANCH: openwrt-25.12
-  OPENWRT_COMMIT: 8a18e84a887379db8954449a9fabe6df54084dea
+  OPENWRT_COMMIT: 34ae6ba2d861e710e3c130c95cdb7eb4a1286121
   MTK_SDK_URL: https://github.com/mediatek/mtk-openwrt-feeds.git
   MTK_SDK_BRANCH: main
-  MTK_SDK_COMMIT: 5ee86b89bc62dee10d8db1e0a48fdd140dd2ec3e
+  MTK_SDK_COMMIT: 9b5754e3a361635595ea31a14176b14169e69d18
   CONFIG_FILE: immortalwrt/MTK/defconfig-vendor-wifi
   UPLOAD_FIRMWARE: true
   TZ: Asia/Shanghai
