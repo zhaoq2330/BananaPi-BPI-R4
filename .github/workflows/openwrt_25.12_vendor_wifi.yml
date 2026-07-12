@@ -72,6 +72,23 @@ jobs:
       run: |
         bash ../mtk-openwrt-feeds/autobuild/unified/autobuild.sh filogic prepare log_file=make
 
+    - name: Pin unconfigured Kconfig symbols to 'n'
+      working-directory: ./openwrt
+      run: |
+        # MTK SDK overlays introduce new kernel Kconfig symbols not yet in
+        # our defconfig.  Without KCONFIG_ALLCONFIG, syncconfig blocks on
+        # interactive prompts for every NEW symbol.
+        cat > target/linux/mediatek/filogic/kconfig-allnoconfig <<'EOF'
+        # Auto-generated: default unknown Kconfig symbols to 'n'.
+        # $(CONFIG_FILE) should explicitly enable the ones we need.
+        EOF
+        for mk in target/linux/mediatek/filogic/target.mk \
+                 target/linux/mediatek/filogic_a73/target.mk; do
+          if [ -f "$mk" ] && ! grep -q 'KCONFIG_ALLCONFIG' "$mk"; then
+            echo 'export KCONFIG_ALLCONFIG := $(TOPDIR)/target/linux/mediatek/filogic/kconfig-allnoconfig' >> "$mk"
+          fi
+        done
+
     - name: Load config
       run: |
         [ -e "$CONFIG_FILE" ] && cat "$CONFIG_FILE" > openwrt/.config
