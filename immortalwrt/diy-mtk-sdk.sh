@@ -1,27 +1,26 @@
 #!/bin/bash
 # ============================================================================
-# diy-mtk-sdk.sh — MTK SDK integration for ImmortalWrt 25.12
+# diy-mtk-sdk.sh - MTK SDK integration for ImmortalWrt 25.12
 # ============================================================================
 # 功能:
 #   1. 克隆 mediatek/mtk-openwrt-feeds
 #   2. 清除 ImmortalWrt 预置的冲突内核补丁
 #   3. 注入本地 SFP/PCS 补丁到 MTK SDK 补丁目录
-#   4. 复制 MTK SDK 文件覆盖层 → 建立补丁基线（含注入的 SFP 补丁）
+#   4. 复制 MTK SDK 文件覆盖层并建立补丁基线
 #   5. 扫描 patches-base 与基线树冲突
-#   6. 安全应用 MTK SDK patches-base（冲突的用 git apply --reject 局部应用）
+#   6. 安全应用 MTK SDK patches-base，冲突项使用 git apply --reject 局部应用
 #   7. 添加 MTK feed 源到 feeds.conf.default
-#   （patches-feeds 推迟到 diy-part5.sh 中的 feeds install 之后）
-#
+#   patches-feeds 推迟到 diy-part5.sh 中的 feeds install 之后处理
 # 用法:
 #   在 openwrt 源码根目录下运行:
 #     GITHUB_WORKSPACE=/path/to/repo \
 #     bash $GITHUB_WORKSPACE/immortalwrt/diy-mtk-sdk.sh
 #
 # 环境变量:
-#   MTK_SDK_URL     — MTK SDK 仓库地址 (默认 github.com/mediatek/mtk-openwrt-feeds)
-#   MTK_SDK_BRANCH  — MTK SDK 分支 (默认 main)
-#   MTK_SDK_DIR     — MTK SDK 克隆目标目录 (默认 ../mtk-openwrt-feeds)
-#   SKIP_PATCH_APPLY — 设置为 1 仅做冲突检测，不实际应用
+#   MTK_SDK_URL      MTK SDK 仓库地址，默认 github.com/mediatek/mtk-openwrt-feeds
+#   MTK_SDK_BRANCH   MTK SDK 分支，默认 main
+#   MTK_SDK_DIR      MTK SDK 克隆目标目录，默认 ../mtk-openwrt-feeds
+#   SKIP_PATCH_APPLY 设置为 1 时仅做冲突检测，不实际应用补丁
 # ============================================================================
 
 set -euo pipefail
@@ -47,8 +46,7 @@ log_error() { echo -e "${RED}[MTK-SDK ERROR]${NC} $*"; }
 log_step()  { echo -e "${BLUE}[MTK-SDK STEP]${NC} $*"; }
 
 # ── 规则文件加载 ────────────────────────────────────────────────────────
-# 从外部数据文件加载规则列表，跳过空行和注释行。
-# 用法: load_rule_file <rule_file> 输出到 stdout
+# 从外部数据文件加载规则列表，跳过空行和注释行# 用法: load_rule_file <rule_file> 输出stdout
 load_rule_file() {
     local rule_file="$1"
     [ -f "$rule_file" ] || return 0
@@ -61,7 +59,7 @@ load_rule_file() {
     done < "$rule_file"
 }
 
-# 返回 rule 文件路径，不存在返回空
+# Return a rule file path, or empty if it does not exist.
 rule_path() {
     local rule_name="$1"
     local path="${WORKSPACE_ROOT}/immortalwrt/mtk-sdk-rules/${rule_name}"
@@ -94,15 +92,15 @@ clone_mtk_sdk() {
     fi
 }
 
-# ── 第二步：冲突检测引擎 ────────────────────────────────────────────────
-# 检测单个 patch 是否可以干净应用到当前树
-# 返回: 0=可应用, 1=已应用, 2=冲突
+# ── 第二步：冲突检测引────────────────────────────────────────────────
+# 检测单patch 是否可以干净应用到当前树
+# 返回: 0=可应 1=已应 2=冲突
 check_patch() {
     local patch_file="$1"
     local patch_name
     patch_name=$(basename "$patch_file")
 
-    # 检查是否已经应用过（反向 apply dry-run）
+    # Check whether the patch has already been applied.
     if patch -p1 -R --dry-run --force < "$patch_file" >/dev/null 2>&1; then
         echo "already-applied"
         return 1
@@ -114,7 +112,7 @@ check_patch() {
         return 0
     fi
 
-    # 使用 git apply 作为更精确的检测
+    # Use git apply as a stricter check.
     if git apply --check --verbose "$patch_file" 2>/dev/null; then
         echo "clean"
         return 0
@@ -181,7 +179,7 @@ mtk_patch_skip_reason() {
     printf 'not needed for BPI-R4 target'
 }
 
-# 扫描目录内所有 patch，生成冲突报告
+# Scan all patches in a directory and report conflicts.
 scan_patches() {
     local patch_dir="$1"
     local label="$2"
@@ -204,7 +202,7 @@ scan_patches() {
         if is_unneeded_mtk_patch "$pf" "$label"; then
             applied=$((applied + 1))
             local skip_reason; skip_reason=$(mtk_patch_skip_reason "$pf")
-            echo "  ${YELLOW}○${NC} $pname — skip: $skip_reason"
+            echo "  ${YELLOW}●${NC} $pname skip: $skip_reason"
             echo "    [SKIP-unneeded] $label: $pname - $skip_reason" >> "$CONFLICT_LOG"
             continue
         fi
@@ -214,15 +212,15 @@ scan_patches() {
         case "$result" in
             clean)
                 clean=$((clean + 1))
-                echo "  ${GREEN}✓${NC} $pname — clean"
+                echo "  ${GREEN}✓${NC} $pname clean"
                 ;;
             already-applied)
                 applied=$((applied + 1))
-                echo "  ${YELLOW}○${NC} $pname — already applied (skip)"
+                echo "  ${YELLOW}●${NC} $pname already applied (skip)"
                 ;;
             conflict)
                 conflict=$((conflict + 1))
-                echo "  ${RED}✗${NC} $pname — pre-scan conflict"
+                echo "  ${RED}✗${NC} $pname pre-scan conflict"
                 echo "    [PRESCAN-CONFLICT] $label: $pname" >> "$CONFLICT_LOG"
                 # 显示冲突详情
                 patch -p1 --dry-run --force < "$pf" 2>&1 | head -5 | \
@@ -235,13 +233,13 @@ scan_patches() {
     printf "  ${label}: total=%d clean=%d already-applied=%d conflict=%d\n\n" \
         "$total" "$clean" "$applied" "$conflict"
 
-    # 返回冲突数
+    # Return the number of conflicts.
     return $conflict
 }
 
 # ── 第三步：安全应用补丁 ────────────────────────────────────────────────
-# 对于冲突补丁：使用 git apply --reject 尽可能应用匹配的 hunks，
-# 失败的 hunks 保存为 .rej 文件供后续审查。
+# For conflicting patches, use git apply --reject to apply matching hunks
+# and leave failed hunks as .rej files for later inspection.
 apply_patches_safe() {
     local patch_dir="$1"
     local label="$2"
@@ -307,7 +305,7 @@ apply_patches_safe() {
                 else
                     log_warn "  PARTIAL (hunks rejected): $pname"
                     partial=$((partial + 1))
-                    echo "  [REJECTS] $label/$pname — check *.rej files" >> "$SKIPPED_LOG"
+                    echo "  [REJECTS] $label/$pname - check *.rej files" >> "$SKIPPED_LOG"
                     # 清理 .rej 文件到专门目录便于审查
                     local rej_dir="${OPENWRT_ROOT}/.mtk-sdk-rejects"
                     mkdir -p "$rej_dir"
@@ -322,7 +320,7 @@ apply_patches_safe() {
         "$total" "$ok" "$partial" "$skipped" "$failed"
 }
 
-# ── 第四步：安全复制文件覆盖层 ──────────────────────────────────────────
+# ── 第四步：安全复制文件覆盖──────────────────────────────────────────
 copy_files_safe() {
     local src_dir="$1"
     local label="$2"
@@ -744,7 +742,7 @@ TARGETEOF
     inject_kconfig_allconfig "${OPENWRT_ROOT}/target/linux/mediatek/filogic_a73/target.mk"
 }
 
-# ── 第五步：添加 MTK feed 源 ────────────────────────────────────────────
+# ── 第五步：添加 MTK feed ────────────────────────────────────────────
 patch_mtk_feed_build_fixes() {
     local npu_hnat_mk="$MTK_SDK_DIR/feed/kernel/mtk_npu/npu-nf_hnat.mk"
     local npu_mk="$MTK_SDK_DIR/feed/kernel/mtk_npu/Makefile"
@@ -762,14 +760,12 @@ patch_mtk_feed_build_fixes() {
         log_warn "mtk_npu Makefile not found, skipping NETSYS_V3 flag"
     fi
 
-    if [ -f "$npu_mk" ] && grep -q 'define Build/Compile' "$npu_mk" && \
-       ! grep -q 'LINUX_DIR)/Module.symvers' "$npu_mk"; then
+    if [ -f "$npu_mk" ] && grep -q 'define Build/Compile' "$npu_mk"; then
         sed -i '/^define Build\/Compile/,/^endef$/{
-            /M="\$(PKG_BUILD_DIR)"/a\\		KBUILD_EXTRA_SYMBOLS="\$(KBUILD_EXTRA_SYMBOLS) \$(LINUX_DIR)/Module.symvers" \\
+            /KBUILD_EXTRA_SYMBOLS=.*Module\.symvers/d
+            /M="\$(PKG_BUILD_DIR)"/a\\		KBUILD_EXTRA_SYMBOLS="\$(wildcard \$(LINUX_DIR)/Module.symvers \$(KERNEL_BUILD_DIR)/pce/Module.symvers) \$(KBUILD_EXTRA_SYMBOLS)" \\
         }' "$npu_mk"
-        log_info "Injected kernel Module.symvers into mtk_npu Build/Compile"
-    elif [ -f "$npu_mk" ]; then
-        log_info "mtk_npu Module.symvers injection already present or not needed"
+        log_info "Injected kernel/PCE Module.symvers into mtk_npu Build/Compile"
     else
         log_warn "mtk_npu Makefile not found, skipping Module.symvers injection"
     fi
@@ -797,7 +793,7 @@ add_mtk_feed() {
     log_info "Added: src-link mtk_openwrt_feed ${MTK_SDK_DIR}/feed"
 }
 
-# ── 第六步：清理 ImmortalWrt 预置的冲突补丁 ─────────────────────────────
+# ── 第六步：清理 ImmortalWrt 预置的冲突补─────────────────────────────
 clean_conflicting_immortalwrt_patches() {
     log_step "Cleaning ImmortalWrt patches that conflict with MTK SDK..."
 
@@ -805,16 +801,12 @@ clean_conflicting_immortalwrt_patches() {
     [ -d "$patch_dir" ] || { log_warn "patches-6.12 not found, skipping"; return 0; }
 
     # ── 已知冲突补丁清单 ────────────────────────────────────────────
-    # 这些是 ImmortalWrt/openwrt-25.12 中可能与 MTK SDK 重叠的补丁
-    # 格式: "文件名前缀|冲突原因"
+    # 这些ImmortalWrt/openwrt-25.12 中可能与 MTK SDK 重叠的补    # 格式: "文件名前缀|冲突原因"
     local known_conflicts=(
-        # MTK SDK 提供了自己的 BPI-R4 支持（patches-base/1133-*）
-        "bananapi_bpi-r4|MTK SDK provides BPI-R4 image support (patches-base/1133)"
-        # MTK SDK 提供自己的 eth/net 补丁链
-        "999-eth-|MTK SDK provides ethernet patches"
+        # MTK SDK 提供了自己的 BPI-R4 支持（patches-base/1133-*        "bananapi_bpi-r4|MTK SDK provides BPI-R4 image support (patches-base/1133)"
+        # MTK SDK 提供自己eth/net 补丁        "999-eth-|MTK SDK provides ethernet patches"
         "999-net-|MTK SDK provides network patches"
-        # MTK SDK 提供自己的 HNAT 包（feed/kernel/mtkhnat）
-        # 注意: "hnat" 前缀匹配所有含 hnat 的补丁文件名
+        # MTK SDK 提供自己HNAT 包（feed/kernel/mtkhnat        # 注意: "hnat" 前缀匹配所有含 hnat 的补丁文件名
         "hnat|MTK SDK provides HNAT via feed"
         "999-2741-mtkhnat|MTK SDK provides HNAT via feed"
         "999-2742-mtkhnat|MTK SDK provides HNAT via feed"
@@ -826,7 +818,7 @@ clean_conflicting_immortalwrt_patches() {
         "9996-ext-hnat|MTK SDK provides ext HNAT via feed"
         "9999-reset|MTK SDK provides reset via feed"
         "99999-hnat|MTK SDK provides extdevice fix via feed"
-        # MTK SDK 提供自己的 flow offload / PPE 补丁
+        # MTK SDK 提供自己flow offload / PPE 补丁
         "999-2735-netfilter|MTK SDK provides flow offload"
         "999-2736-net-8021q|MTK SDK provides 8021q offload"
         "999-2737-net-bridge|MTK SDK provides bridge offload"
@@ -856,9 +848,9 @@ clean_conflicting_immortalwrt_patches() {
         "999-3020|MTK SDK provides macvlan support"
         "999-3021|MTK SDK provides tport_idx"
         "999-3022|MTK SDK provides keep dscp"
-        # MTK SDK 提供自己的 crypto inline
+        # MTK SDK 提供自己crypto inline
         "999-2747-crypto|MTK SDK provides crypto inline via feed"
-        # MTK SDK 提供自己的 2.5G EEE backport
+        # MTK SDK 提供自己2.5G EEE backport
         "999-1700-v6.8-net-phy-2p5g|MTK SDK may provide newer phy backports"
         "999-1701-v6.8|MTK SDK may provide newer phy backports"
         "999-1702-v6.8|MTK SDK may provide newer phy backports"
@@ -883,7 +875,7 @@ clean_conflicting_immortalwrt_patches() {
         "999-1721-v6.13|MTK SDK may provide newer phy backports"
         "999-1722-v6.14|MTK SDK may provide newer phy backports"
         "999-1723-v6.10|MTK SDK may provide newer phy backports"
-        # MTK SDK 通过 feed 提供 SFP 支持，不需要 base 里的重复 patch
+        # MTK SDK 通过 feed 提供 SFP 支持，不需base 里的重复 patch
         "997-sfp-rtl8672|MTK SDK may have updated SFP support"
         "998-sfp-rtl8672|MTK SDK may have updated SFP support"
         "999-2753-net-phy-sfp|MTK SDK provides SFP support"
@@ -894,7 +886,7 @@ clean_conflicting_immortalwrt_patches() {
     for conflict in "${known_conflicts[@]}"; do
         local prefix="${conflict%%|*}"
         local reason="${conflict#*|}"
-        # 查找匹配的补丁文件
+        # Find matching patch files.
         while IFS= read -r -d '' matched; do
             local bname; bname=$(basename "$matched")
             log_warn "  Removing conflicting ImmortalWrt patch: $bname"
@@ -911,9 +903,9 @@ clean_conflicting_immortalwrt_patches() {
     fi
 }
 
-# ── 第七步：验证关键构建工具完整性 ──────────────────────────────────────
-# MTK SDK 的 25.12/files/ 覆盖或 patches-base 的 --reject 局部应用
-# 可能损坏 tools/Makefile 或删除标准工具目录。
+# ── 第七步：验证关键构建工具完整──────────────────────────────────────
+# MTK SDK overlays or rejected patches may damage tools/Makefile or
+# remove standard tool directories; repair the critical pieces here.
 verify_critical_tools() {
     log_step "Verifying critical build tools after SDK overlay..."
 
@@ -925,7 +917,7 @@ verify_critical_tools() {
 
         if [ ! -d "${OPENWRT_ROOT}/tools/${tool}" ] || \
            [ ! -f "${OPENWRT_ROOT}/tools/${tool}/Makefile" ]; then
-            log_error "  tools/${tool} directory or Makefile missing — restoring"
+            log_error "  tools/${tool} directory or Makefile missing restoring"
             if git -C "$OPENWRT_ROOT" checkout -- "tools/${tool}" 2>/dev/null; then
                 log_info "  Restored tools/${tool}/ from git"
             else
@@ -962,19 +954,19 @@ MKEOF
         [ -f "$tools_makefile" ] || return 0
         grep -qw "$tool" "$tools_makefile" && return 0
 
-        log_warn "  tools/Makefile missing '${tool}' — adding minimal tools-y entry"
+        log_warn "  tools/Makefile missing '${tool}' adding minimal tools-y entry"
         printf '\n# Restored by diy-mtk-sdk.sh after MTK SDK overlay\n' >> "$tools_makefile"
         printf 'tools-y += %s\n' "$tool" >> "$tools_makefile"
         restored=$((restored + 1))
     }
 
-    # 检查 ar-tool 目录 — 本次 CI 报错 "No such file or directory"
+    # 检ar-tool 目录 本次 CI 报错 "No such file or directory"
     restore_tool_dir "ar-tool"
 
-    # 不整文件恢复 tools/Makefile，避免抹掉 MTK SDK patches-base 的新增工具。
+    # Add the minimal tools/Makefile entry without restoring the whole file.
     ensure_tool_makefile_entry "ar-tool"
 
-    # 通用检查：确保 tools/ 下核心目录存在
+    # Ensure core tool directories exist.
     for tool in padjffs2 firmware-utils; do
         restore_tool_dir "$tool"
     done
@@ -984,7 +976,7 @@ MKEOF
     true  # prevent set -e from seeing "restored>0 -> [ -eq 0 ] returns 1" as failure
 }
 
-# ── 阶段 0: 初始化 ────────────────────────────────────────────────────
+# ── 阶段 0: 初始────────────────────────────────────────────────────
 overlay_autobuild_kernel_files() {
     local dest="$OPENWRT_ROOT/target/linux/mediatek/files-6.12"
     local src="$MTK_SDK_DIR/autobuild/unified/global/logan_common/25.12/files/target/linux/mediatek/files-6.12"
@@ -1085,14 +1077,14 @@ PATCH
 }
 
 stage_init() {
-    echo "# MTK SDK Integration Log — $(date)" > "$CONFLICT_LOG"
-    echo "# MTK SDK Applied Patches — $(date)" > "$APPLIED_LOG"
-    echo "# MTK SDK Skipped Patches — $(date)" > "$SKIPPED_LOG"
+    echo "# MTK SDK Integration Log $(date)" > "$CONFLICT_LOG"
+    echo "# MTK SDK Applied Patches $(date)" > "$APPLIED_LOG"
+    echo "# MTK SDK Skipped Patches $(date)" > "$SKIPPED_LOG"
     echo "MTK_SDK_DIR=$MTK_SDK_DIR" >> "$APPLIED_LOG"
     echo "MTK_SDK_BRANCH=$MTK_SDK_BRANCH" >> "$APPLIED_LOG"
 }
 
-# ── 阶段 1: SDK 覆盖层同步 ──────────────────────────────────────────────
+# ── 阶段 1: SDK 覆盖层同──────────────────────────────────────────────
 stage_overlay() {
     # 克隆 SDK
     clone_mtk_sdk || exit 1
@@ -1100,13 +1092,12 @@ stage_overlay() {
     # 清理 ImmortalWrt 预置冲突补丁
     clean_conflicting_immortalwrt_patches
 
-    # 移除不兼容的旧 SFP quirk 补丁，注入本地 SFP/PCS 补丁
+    # 移除不兼容的SFP quirk 补丁，注入本SFP/PCS 补丁
     remove_broken_sfp_612_patches
     remove_stale_pcs_lynxi_612_patches
     sync_local_sfp_612_patches
 
-    # 复制 MTK SDK 25.12 文件覆盖层
-    copy_files_safe "$MTK_SDK_DIR/25.12/files" "25.12/files"
+    # 复制 MTK SDK 25.12 文件覆盖    copy_files_safe "$MTK_SDK_DIR/25.12/files" "25.12/files"
 
     # 复制 filogic 特定文件
     local filogic_files="$MTK_SDK_DIR/autobuild/unified/filogic/25.12/files"
@@ -1114,21 +1105,21 @@ stage_overlay() {
         copy_files_safe "$filogic_files" "filogic/25.12/files"
     fi
 
-    # 复写后归一化 SFP 补丁
+    # 复写后归一SFP 补丁
     remove_broken_sfp_612_patches
     remove_stale_pcs_lynxi_612_patches
     sync_local_sfp_612_patches
 }
 
-# ── 阶段 2: 覆盖后清理 ──────────────────────────────────────────────────
+# ── 阶段 2: 覆盖后清──────────────────────────────────────────────────
 stage_cleanup() {
-    # 移除不适用于 BPI-R4 的 MTK SDK overlay 产物
+    # 移除不适用BPI-R4 MTK SDK overlay 产物
     remove_mtk_fstools_overlay_patches
     remove_mtk_listed_conflicts
 
     overlay_autobuild_kernel_files
 
-    # 复写后归一化 + 验证 SFP 补丁
+    # 复写后归一+ 验证 SFP 补丁
     remove_broken_sfp_612_patches
     remove_stale_pcs_lynxi_612_patches
     sync_local_sfp_612_patches
@@ -1143,20 +1134,19 @@ stage_patches() {
     apply_patches_safe "$MTK_SDK_DIR/25.12/patches-base" "patches-base"
 }
 
-# ── 阶段 4: 内核配置与工具修正 ──────────────────────────────────────────
+# ── 阶段 4: 内核配置与工具修──────────────────────────────────────────
 stage_fixups() {
     ensure_bpi_r4_mtk_packages
     ensure_kernel_config_fixes
     verify_critical_tools
 }
 
-# ── 阶段 5: Feed 注册与收尾 ─────────────────────────────────────────────
+# ── 阶段 5: Feed 注册与收─────────────────────────────────────────────
 stage_finalize() {
     add_mtk_feed
     patch_mtk_feed_build_fixes
 
-    # fdt-patch-dm-verify stub（BPI-R4 不使用 DM-verity secure boot）
-    local stub_tool="${OPENWRT_ROOT}/tools/fdt-patch-dm-verify"
+    # fdt-patch-dm-verify stub（BPI-R4 不使DM-verity secure boot    local stub_tool="${OPENWRT_ROOT}/tools/fdt-patch-dm-verify"
     if [ ! -f "$stub_tool/Makefile" ]; then
         mkdir -p "$stub_tool"
         cat > "$stub_tool/Makefile" <<'MKEOF'
@@ -1219,7 +1209,7 @@ stage_summary() {
     echo "============================================================================"
 }
 
-# ── 主流程 ──────────────────────────────────────────────────────────────
+# ── 主流──────────────────────────────────────────────────────────────
 main() {
     echo ""
     echo "============================================================================"
@@ -1231,22 +1221,20 @@ main() {
     echo ""
 
     stage_init
-    log_step "Stage 1/6 — SDK overlay sync"
+    log_step "Stage 1/6 SDK overlay sync"
     stage_overlay
-    log_step "Stage 2/6 — Post-overlay cleanup"
+    log_step "Stage 2/6 Post-overlay cleanup"
     stage_cleanup
-    log_step "Stage 3/6 — Patch application"
+    log_step "Stage 3/6 Patch application"
     stage_patches
-    log_step "Stage 4/6 — Kernel config & tool fixups"
+    log_step "Stage 4/6 Kernel config & tool fixups"
     stage_fixups
-    log_step "Stage 5/6 — Feed registration & finalization"
+    log_step "Stage 5/6 Feed registration & finalization"
     stage_finalize
-    log_step "Stage 6/6 — Summary"
+    log_step "Stage 6/6 Summary"
     stage_summary
 
-    # 预扫描冲突是预期的（ImmortalWrt 与 OpenWrt 基线差异），不应阻断构建。
-    # 真正需要关注的是应用阶段是否仍产生 [REJECTS]。
-    return 0
+    # 预扫描冲突是预期的（ImmortalWrt OpenWrt 基线差异），不应阻断构建    # 真正需要关注的是应用阶段是否仍产生 [REJECTS]    return 0
 }
 
 main "$@"
