@@ -1016,20 +1016,21 @@ overlay_autobuild_kernel_files() {
         done < <(find "$dest" -type f \( -name 'Makefile' -o -name 'Kbuild' -o -name 'Kconfig' \) -print0 2>/dev/null || true)
 
         # ── 2. Remove subtrees that shadow the kernel's own source ──
-        # Whitelist: drivers/ for HNAT sources, include/ for ra_nat.h.
-        # Blacklist: net/, arch/, kernel/, lib/, mm/, security/,
-        # sound/, scripts/, tools/, usr/, crypto/, block/, ipc/, init/, virt/.
+        # Whitelist: drivers/ for HNAT sources, include/ for ra_nat.h,
+        # arch/ for ImmortalWrt device tree files.
+        # Blacklist: net/, kernel/, lib/, mm/, security/, sound/,
+        # scripts/, tools/, usr/, crypto/, block/, ipc/, init/, virt/.
         for dir in "$dest"/*/; do
             dir="${dir%/}"
             case "$(basename "$dir")" in
-                drivers|include) continue ;;
+                drivers|include|arch) continue ;;
             esac
             rm -rf "$dir"
             cleaned_dir=$((cleaned_dir + 1))
         done
 
         [ "$cleaned_mf" -gt 0 ] && log_warn "Removed $cleaned_mf non-HNAT Makefile/Kbuild/Kconfig files"
-        [ "$cleaned_dir" -gt 0 ] && log_warn "Removed $cleaned_dir compiled kernel subtrees from autobuild files-6.12 overlay (kept drivers/include)"
+        [ "$cleaned_dir" -gt 0 ] && log_warn "Removed $cleaned_dir compiled kernel subtrees from autobuild files-6.12 overlay (kept drivers/include/arch)"
 
         log_info "Autobuild kernel files overlaid to $dest"
     else
