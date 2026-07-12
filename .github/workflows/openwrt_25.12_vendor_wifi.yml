@@ -75,7 +75,7 @@ jobs:
 
     - name: Apply post-autobuild fixups
       run: |
-        chmod +x $OPENWRT_NAME/*.sh
+        chmod +x immortalwrt/*.sh
         cd openwrt
         export MTK_SDK_DIR="${{ env.MTK_SDK_DIR }}"
         export OPENWRT_ROOT="$(pwd)"
