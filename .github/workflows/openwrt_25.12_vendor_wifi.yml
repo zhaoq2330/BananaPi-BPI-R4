@@ -54,9 +54,8 @@ jobs:
 
     - name: Download firmware source code
       run: |
-        git clone --depth 1 $REPO_URL -b $REPO_BRANCH openwrt
+        git clone --branch $REPO_BRANCH $REPO_URL openwrt
         cd openwrt
-        git fetch --depth 1 origin $OPENWRT_COMMIT
         git checkout $OPENWRT_COMMIT
 
     - name: Restore toolchain cache
@@ -69,7 +68,7 @@ jobs:
     - name: Clone MTK SDK (latest main)
       run: |
         MTK_SDK_DIR="${{ github.workspace }}/mtk-openwrt-feeds"
-        git clone --depth=1 --branch "${{ env.MTK_SDK_BRANCH }}" "${{ env.MTK_SDK_URL }}" "$MTK_SDK_DIR"
+        git clone --branch "${{ env.MTK_SDK_BRANCH }}" "${{ env.MTK_SDK_URL }}" "$MTK_SDK_DIR"
         echo "MTK_SDK_DIR=$MTK_SDK_DIR" >> $GITHUB_ENV
         cd "$MTK_SDK_DIR"
         git log --oneline -1
