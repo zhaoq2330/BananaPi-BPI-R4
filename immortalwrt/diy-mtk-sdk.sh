@@ -1146,7 +1146,8 @@ stage_finalize() {
     add_mtk_feed
     patch_mtk_feed_build_fixes
 
-    # fdt-patch-dm-verify stub（BPI-R4 不使DM-verity secure boot    local stub_tool="${OPENWRT_ROOT}/tools/fdt-patch-dm-verify"
+    # fdt-patch-dm-verify stub (BPI-R4 does not use DM-verity secure boot)
+    local stub_tool="${OPENWRT_ROOT}/tools/fdt-patch-dm-verify"
     if [ ! -f "$stub_tool/Makefile" ]; then
         mkdir -p "$stub_tool"
         cat > "$stub_tool/Makefile" <<'MKEOF'
