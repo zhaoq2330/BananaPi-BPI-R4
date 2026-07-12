@@ -58,4 +58,24 @@ export CMAKE_POLICY_VERSION_MINIMUM=3.5
 echo "CMAKE_POLICY_VERSION_MINIMUM=3.5" >> "${GITHUB_ENV:-/dev/null}" 2>/dev/null || true
 log "  CMAKE_POLICY_VERSION_MINIMUM=3.5 (set for all subsequent steps)"
 
+# ── 4. Extract mtk_eth_reset.h from autobuild patch ───────────────────
+log "Extracting mtk_eth_reset.h..."
+
+patch_src="${MTK_SDK_DIR}/autobuild/unified/global/logan_common/25.12/files/target/linux/mediatek/patches-6.12"
+patch="${patch_src}/999-eth-93-mtk_eth_soc-add-internal-SER-notify-event.patch"
+hdr="${OPENWRT_ROOT}/target/linux/mediatek/files-6.12/drivers/net/ethernet/mediatek/mtk_eth_reset.h"
+
+if [ -f "$patch" ]; then
+    mkdir -p "$(dirname "$hdr")"
+    sed -n '/^diff.*mtk_eth_reset\.h$/,/^diff.*mtk_eth_soc\.c$/{/^+++/!s/^+//;/^diff.*mtk_eth_soc\.c$/d;p}' "$patch" | \
+        sed '1,/^@@/d' > "$hdr"
+    if [ -s "$hdr" ] && grep -q 'MTK_FE_START_RESET' "$hdr"; then
+        log "  Extracted ($(wc -l < "$hdr") lines)"
+    else
+        warn "Extraction produced empty or invalid file"
+    fi
+else
+    warn "999-eth-93 patch not found"
+fi
+
 log "All fixups complete."
