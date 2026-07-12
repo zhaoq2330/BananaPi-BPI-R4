@@ -46,7 +46,7 @@ log_error() { echo -e "${RED}[MTK-SDK ERROR]${NC} $*"; }
 log_step()  { echo -e "${BLUE}[MTK-SDK STEP]${NC} $*"; }
 
 # ── 规则文件加载 ────────────────────────────────────────────────────────
-# 从外部数据文件加载规则列表，跳过空行和注释行# 用法: load_rule_file <rule_file> 输出stdout
+# Load rule list from external data file, skipping empty and comment lines.
 load_rule_file() {
     local rule_file="$1"
     [ -f "$rule_file" ] || return 0
@@ -92,7 +92,7 @@ clone_mtk_sdk() {
     fi
 }
 
-# ── 第二步：冲突检测引────────────────────────────────────────────────
+# ── 第二步：冲突检测引擎 ──────────────────────────────────────────────────
 # 检测单patch 是否可以干净应用到当前树
 # 返回: 0=可应 1=已应 2=冲突
 check_patch() {
@@ -320,7 +320,7 @@ apply_patches_safe() {
         "$total" "$ok" "$partial" "$skipped" "$failed"
 }
 
-# ── 第四步：安全复制文件覆盖──────────────────────────────────────────
+# ── 第四步：安全复制文件覆盖 ──────────────────────────────────────────
 copy_files_safe() {
     local src_dir="$1"
     local label="$2"
@@ -775,6 +775,22 @@ patch_mtk_feed_build_fixes() {
         log_info "Ensured mt76-vendor CMake minimum version compatibility"
     fi
 
+    # HNAT Module.symvers must propagate to dependent NPU modules.
+    # Without KERNEL_EXTRA_SYMBOLS:=1, OpenWrt build system only passes
+    # DEPENDS (build order) without exporting symbols.
+    local netdev_mk="${OPENWRT_ROOT}/package/kernel/linux/modules/netdevices.mk"
+    if [ -f "$netdev_mk" ] && grep -q 'KernelPackage/mediatek_hnat' "$netdev_mk"; then
+        if ! grep -q 'KERNEL_EXTRA_SYMBOLS.*:=.*1' "$netdev_mk"; then
+            sed -i '/^define KernelPackage\/mediatek_hnat$/,/^endef$/{/DEPENDS:=/a\  KERNEL_EXTRA_SYMBOLS:=1
+}' "$netdev_mk"
+            log_info "Injected KERNEL_EXTRA_SYMBOLS:=1 into KernelPackage/mediatek_hnat"
+        else
+            log_info "KernelPackage/mediatek_hnat already has KERNEL_EXTRA_SYMBOLS"
+        fi
+    else
+        log_warn "netdevices.mk or KernelPackage/mediatek_hnat not found, HNAT symbols may not propagate"
+    fi
+
     # ndo_flow_offload_stats64_add is provided by the autobuild 999-net-04
     # netdevice patch copied in overlay_autobuild_kernel_files().
 }
@@ -793,7 +809,7 @@ add_mtk_feed() {
     log_info "Added: src-link mtk_openwrt_feed ${MTK_SDK_DIR}/feed"
 }
 
-# ── 第六步：清理 ImmortalWrt 预置的冲突补─────────────────────────────
+# ── 第六步：清理 ImmortalWrt 预置的冲突补丁 ─────────────────────────────
 clean_conflicting_immortalwrt_patches() {
     log_step "Cleaning ImmortalWrt patches that conflict with MTK SDK..."
 
@@ -801,12 +817,13 @@ clean_conflicting_immortalwrt_patches() {
     [ -d "$patch_dir" ] || { log_warn "patches-6.12 not found, skipping"; return 0; }
 
     # ── 已知冲突补丁清单 ────────────────────────────────────────────
-    # 这些ImmortalWrt/openwrt-25.12 中可能与 MTK SDK 重叠的补    # 格式: "文件名前缀|冲突原因"
+    # Conflicts: ImmortalWrt prefixes that MTK SDK replaces.
+    # Format: "prefix|reason"
     local known_conflicts=(
         # MTK SDK 提供了自己的 BPI-R4 支持（patches-base/1133-*        "bananapi_bpi-r4|MTK SDK provides BPI-R4 image support (patches-base/1133)"
         # MTK SDK 提供自己eth/net 补丁        "999-eth-|MTK SDK provides ethernet patches"
         "999-net-|MTK SDK provides network patches"
-        # MTK SDK 提供自己HNAT 包（feed/kernel/mtkhnat        # 注意: "hnat" 前缀匹配所有含 hnat 的补丁文件名
+        # HNAT driver via feed ("hnat" prefix matches all HNAT patches)
         "hnat|MTK SDK provides HNAT via feed"
         "999-2741-mtkhnat|MTK SDK provides HNAT via feed"
         "999-2742-mtkhnat|MTK SDK provides HNAT via feed"
@@ -903,7 +920,7 @@ clean_conflicting_immortalwrt_patches() {
     fi
 }
 
-# ── 第七步：验证关键构建工具完整──────────────────────────────────────
+# ── 第七步：验证关键构建工具完整性 ──────────────────────────────────────
 # MTK SDK overlays or rejected patches may damage tools/Makefile or
 # remove standard tool directories; repair the critical pieces here.
 verify_critical_tools() {
@@ -976,7 +993,7 @@ MKEOF
     true  # prevent set -e from seeing "restored>0 -> [ -eq 0 ] returns 1" as failure
 }
 
-# ── 阶段 0: 初始────────────────────────────────────────────────────
+# ── 阶段 0: 初始化 ────────────────────────────────────────────────────
 overlay_autobuild_kernel_files() {
     local dest="$OPENWRT_ROOT/target/linux/mediatek/files-6.12"
     local src="$MTK_SDK_DIR/autobuild/unified/global/logan_common/25.12/files/target/linux/mediatek/files-6.12"
@@ -1084,7 +1101,7 @@ stage_init() {
     echo "MTK_SDK_BRANCH=$MTK_SDK_BRANCH" >> "$APPLIED_LOG"
 }
 
-# ── 阶段 1: SDK 覆盖层同──────────────────────────────────────────────
+# ── 阶段 1: SDK 覆盖层同步 ──────────────────────────────────────────────
 stage_overlay() {
     # 克隆 SDK
     clone_mtk_sdk || exit 1
@@ -1111,7 +1128,7 @@ stage_overlay() {
     sync_local_sfp_612_patches
 }
 
-# ── 阶段 2: 覆盖后清──────────────────────────────────────────────────
+# ── 阶段 2: 覆盖后清理 ──────────────────────────────────────────────────
 stage_cleanup() {
     # 移除不适用BPI-R4 MTK SDK overlay 产物
     remove_mtk_fstools_overlay_patches
@@ -1134,14 +1151,14 @@ stage_patches() {
     apply_patches_safe "$MTK_SDK_DIR/25.12/patches-base" "patches-base"
 }
 
-# ── 阶段 4: 内核配置与工具修──────────────────────────────────────────
+# ── 阶段 4: 内核配置与工具修复 ──────────────────────────────────────────
 stage_fixups() {
     ensure_bpi_r4_mtk_packages
     ensure_kernel_config_fixes
     verify_critical_tools
 }
 
-# ── 阶段 5: Feed 注册与收─────────────────────────────────────────────
+# ── 阶段 5: Feed 注册与收尾 ─────────────────────────────────────────────
 stage_finalize() {
     add_mtk_feed
     patch_mtk_feed_build_fixes
@@ -1210,7 +1227,7 @@ stage_summary() {
     echo "============================================================================"
 }
 
-# ── 主流──────────────────────────────────────────────────────────────
+# ── 主流程 ──────────────────────────────────────────────────────────────
 main() {
     echo ""
     echo "============================================================================"
@@ -1235,7 +1252,9 @@ main() {
     log_step "Stage 6/6 Summary"
     stage_summary
 
-    # 预扫描冲突是预期的（ImmortalWrt OpenWrt 基线差异），不应阻断构建    # 真正需要关注的是应用阶段是否仍产生 [REJECTS]    return 0
+    # Pre-scan conflicts are expected (ImmortalWrt vs OpenWrt baseline).
+    # Focus on [REJECTS] from the apply phase, not pre-scan conflicts.
+    return 0
 }
 
 main "$@"
