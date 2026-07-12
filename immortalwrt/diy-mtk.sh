@@ -63,7 +63,7 @@ if [ -d "$files_src" ]; then
             esac
         done
 
-        cp -af "$tmp_dst"/. "$files_dst/" 2>/dev/null
+        cp -af "$tmp_dst"/. "$files_dst"/
         log "  HNAT/NPU kernel files overlaid"
     else
         warn "Copy from logan_common failed"
@@ -72,7 +72,8 @@ if [ -d "$files_src" ]; then
     rm -rf "$tmp_dst"
     trap - EXIT
 else
-    warn "logan_common files-6.12 not found"
+    warn "logan_common files-6.12 not found — cannot build HNAT/NPU"
+    exit 1
 fi
 
 # ── 4. Extract mtk_eth_reset.h from autobuild patch ───────────────────
@@ -84,9 +85,19 @@ hdr="${files_dst}/drivers/net/ethernet/mediatek/mtk_eth_reset.h"
 
 if [ -f "$patch" ]; then
     mkdir -p "$(dirname "$hdr")"
-    sed -n '/^diff.*mtk_eth_reset\.h$/,/^diff.*mtk_eth_soc\.c$/{/^+++/!s/^+//;/^diff.*mtk_eth_soc\.c$/d;p}' "$patch" | \
+    sed -n '/^diff.*mtk_eth_reset\.h$/,/^diff --git /{/^+++/!s/^+//;/^diff --git /d;p}' "$patch" | \
         sed '1,/^@@/d' > "$hdr"
     if [ -s "$hdr" ] && grep -q 'MTK_FE_START_RESET' "$hdr"; then
+        log "  Extracted ($(wc -l < "$hdr") lines)"
+    else
+        warn "Extraction produced empty or invalid file"
+    fi
+else
+    warn "999-eth-93 patch not found — cannot extract mtk_eth_reset.h"
+    exit 1
+fi
+
+log "All fixups complete."
         log "  Extracted ($(wc -l < "$hdr") lines)"
     else
         warn "Extraction produced empty or invalid file"
