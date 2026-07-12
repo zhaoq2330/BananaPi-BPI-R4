@@ -65,7 +65,7 @@ jobs:
       with:
         ccache: 'false'
         prefix: ${{ github.workspace }}/openwrt
-        mixkey: ${{ env.OPENWRT_NAME }}-${{ env.OPENWRT_DEVICE }}-${{ env.REPO_BRANCH }}
+        mixkey: ${{ env.OPENWRT_NAME }}-${{ env.OPENWRT_DEVICE }}-${{ env.REPO_BRANCH }}-${{ env.OPENWRT_COMMIT }}
 
     - name: Clone MTK SDK
       run: |
