@@ -13,7 +13,6 @@ env:
   REPO_URL: https://github.com/immortalwrt/immortalwrt
   REPO_BRANCH: openwrt-25.12
   CONFIG_FILE: immortalwrt/MTK/defconfig
-  DIY_P0_SH: immortalwrt/diy-mtk-sdk.sh
   DIY_P1_SH: immortalwrt/diy-part5.sh
   DIY_P2_SH: immortalwrt/diy-part6.sh
   UPLOAD_FIRMWARE: true
@@ -21,8 +20,6 @@ env:
   TZ: Asia/Shanghai
   OPENWRT_NAME: immortalwrt
   OPENWRT_DEVICE: mediatek
-  MTK_SDK_URL: https://github.com/mediatek/mtk-openwrt-feeds.git
-  MTK_SDK_BRANCH: main
 
 jobs:
   build:
@@ -89,41 +86,7 @@ jobs:
         restore-keys: |
           ccache-${{ env.OPENWRT_NAME }}-${{ env.OPENWRT_DEVICE }}-${{ env.REPO_BRANCH }}-
 
-    - name: Clone MTK SDK
-      run: |
-        MTK_SDK_DIR="${{ github.workspace }}/mtk-openwrt-feeds"
-        if [ -d "$MTK_SDK_DIR/.git" ]; then
-          echo "MTK SDK already cached, pulling latest..."
-          git -C "$MTK_SDK_DIR" fetch origin "${{ env.MTK_SDK_BRANCH }}" --depth=1 || true
-          git -C "$MTK_SDK_DIR" checkout "${{ env.MTK_SDK_BRANCH }}" || true
-        else
-          echo "Cloning MTK SDK..."
-          git clone --depth=1 --branch "${{ env.MTK_SDK_BRANCH }}" "${{ env.MTK_SDK_URL }}" "$MTK_SDK_DIR"
-        fi
-        echo "MTK_SDK_DIR=$MTK_SDK_DIR" >> $GITHUB_ENV
-        echo "MTK SDK ready at $MTK_SDK_DIR"
-
-    - name: Apply MTK SDK patches and files
-      run: |
-        chmod +x $OPENWRT_NAME/*.sh
-        cd openwrt
-        export MTK_SDK_DIR="${{ env.MTK_SDK_DIR }}"
-        export GITHUB_WORKSPACE="${{ github.workspace }}"
-        $GITHUB_WORKSPACE/$DIY_P0_SH
-
-    - name: Show MTK SDK conflict report
-      if: always()
-      run: |
-        if [ -f "${{ github.workspace }}/mtk-sdk-conflict-log.txt" ]; then
-          echo "=== MTK SDK Conflict Report ==="
-          cat "${{ github.workspace }}/mtk-sdk-conflict-log.txt"
-        fi
-        if [ -f "${{ github.workspace }}/mtk-sdk-skipped-log.txt" ]; then
-          echo "=== MTK SDK Skipped Patches ==="
-          cat "${{ github.workspace }}/mtk-sdk-skipped-log.txt"
-        fi
-
-    - name: Update base feed indexes (incl. MTK feed)
+    - name: Update base feed indexes
       working-directory: ./openwrt
       run: |
         ./scripts/feeds update -a
@@ -159,44 +122,6 @@ jobs:
         echo "date1=$(date +'%Y.%m.%d')" >> $GITHUB_ENV
         echo "date2=$(date "+%Y年%m月%d日")" >> $GITHUB_ENV
         echo "status=success" >> $GITHUB_OUTPUT
-
-    - name: Collect kernel patch failure context
-      if: failure() && steps.compile.outcome == 'failure'
-      run: |
-        mkdir -p "${{ github.workspace }}/kernel-patch-debug"
-        cd openwrt
-
-        {
-          echo "=== prepared linux trees ==="
-          find build_dir -path '*/linux-mediatek_filogic/linux-6.12.*' -type d 2>/dev/null | sort || true
-          echo ""
-          echo "=== mediatek patches-6.12 SFP/PCS patches ==="
-          find target/linux/mediatek/patches-6.12 -maxdepth 1 \
-            \( -name '999-277*.patch' -o -name '999-278*.patch' -o -name '*pcs*lynxi*.patch' \) \
-            -type f -print 2>/dev/null | sort || true
-        } > "${{ github.workspace }}/kernel-patch-debug/index.txt"
-
-        find build_dir -path '*/linux-mediatek_filogic/linux-6.12.*/drivers/net/pcs/pcs-mtk-lynxi.c' \
-          -type f -exec cp -v {} "${{ github.workspace }}/kernel-patch-debug/" \; 2>/dev/null || true
-        find build_dir -path '*/linux-mediatek_filogic/linux-6.12.*/drivers/net/pcs/pcs-mtk-lynxi.c.rej' \
-          -type f -exec cp -v {} "${{ github.workspace }}/kernel-patch-debug/" \; 2>/dev/null || true
-        find build_dir -path '*/linux-mediatek_filogic/linux-6.12.*/drivers/net/phy/sfp.c' \
-          -type f -exec cp -v {} "${{ github.workspace }}/kernel-patch-debug/" \; 2>/dev/null || true
-        find build_dir -path '*/linux-mediatek_filogic/linux-6.12.*/drivers/net/phy/sfp.c.rej' \
-          -type f -exec cp -v {} "${{ github.workspace }}/kernel-patch-debug/" \; 2>/dev/null || true
-
-        cp -v target/linux/mediatek/patches-6.12/999-pcs-99-mtk-lynxi-hold-link-down-invalid-speed.patch \
-          "${{ github.workspace }}/kernel-patch-debug/" 2>/dev/null || true
-        cp -v target/linux/mediatek/patches-6.12/999-2779-sfp-rtl8261be-1g-reprobe-watchdog.patch \
-          "${{ github.workspace }}/kernel-patch-debug/" 2>/dev/null || true
-
-    - name: Upload kernel patch failure context
-      if: failure() && steps.compile.outcome == 'failure'
-      uses: actions/upload-artifact@v7.0.1
-      with:
-        name: kernel-patch-debug-${{ github.run_id }}
-        path: ${{ github.workspace }}/kernel-patch-debug
-        if-no-files-found: warn
 
     - name: Save ccache
       if: steps.compile.outputs.status == 'success' && steps.ccache-restore.outputs.cache-hit != 'true'
