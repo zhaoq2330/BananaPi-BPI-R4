@@ -72,9 +72,13 @@ jobs:
       run: |
         bash ../mtk-openwrt-feeds/autobuild/unified/autobuild.sh filogic prepare log_file=make
 
-    - name: Pin unconfigured Kconfig symbols to 'n'
+    - name: Pin new kernel Kconfig symbols
       working-directory: ./openwrt
       run: |
+        config_file="target/linux/mediatek/filogic/config-6.12"
+        if ! grep -q '^# CONFIG_MEDIATEK_2P5GE_PHY is not set$' "$config_file"; then
+          echo '# CONFIG_MEDIATEK_2P5GE_PHY is not set' >> "$config_file"
+        fi
         cat > target/linux/mediatek/filogic/kconfig-allnoconfig <<'EOF'
         EOF
         for mk in target/linux/mediatek/filogic/target.mk \
