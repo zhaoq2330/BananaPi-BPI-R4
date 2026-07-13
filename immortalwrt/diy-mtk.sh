@@ -67,24 +67,35 @@ if [ -d "$files_src" ]; then
         cp -af "$tmp_dst"/. "$files_dst/"
         log "  overlaid to: ${files_dst}"
 
-        # 999-eth-91 adds obj-$(CONFIG_NET_MEDIATEK_HNAT) += mtk_hnat/ to the
-        # kernel's drivers/net/ethernet/mediatek/Makefile, plus Kconfig entries.
+        # 999-eth-91 provides HNAT Kconfig, Makefile, and soc hooks.
         # autobuild.sh does NOT apply logan_common patches-6.12.
         #
-        # IMPORTANT: The full 999-eth-91 also modifies mtk_eth_soc.c with PPE
-        # guard hunks (#if !defined(CONFIG_NET_MEDIATEK_HNAT)) that fail on
-        # linux-6.12.94 due to PPE function context changes.  Quilt rejects the
-        # entire patch if any hunk fails → build breaks.  Use the trimmed
-        # version (Kconfig + Makefile only) from local mtk-patches/.
+        # Split into two trimmed patches to avoid PPE guard hunk failures:
+        #   1) Kconfig + Makefile  (required for compilation)
+        #   2) include + rx hooks  (safe additive hunks, no PPE guards)
+        # The 5 PPE guard hunks (#if !defined wrappers) are excluded —
+        # they fail on linux-6.12.94 due to PPE function context changes.
         script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-        local_patch="${script_dir}/../patches/filogic/mtk/mtk-999-eth-91-hnat-kconfig-makefile.patch"
+        mtk_patches="${script_dir}/../patches/filogic/mtk"
         owrt_patches="${OPENWRT_ROOT}/target/linux/mediatek/patches-6.12"
         mkdir -p "$owrt_patches"
+
+        # Stage trimmed 999-eth-91: Kconfig + Makefile only.
+        local_patch="${mtk_patches}/mtk-999-eth-91-hnat-kconfig-makefile.patch"
         if [ -f "$local_patch" ]; then
             cp -f "$local_patch" "$owrt_patches/"
-            log "  staged trimmed 999-eth-91 (Kconfig+Makefile) to patches-6.12"
+            log "  staged mtk-999-eth-91 (Kconfig+Makefile)"
         else
-            warn "trimmed 999-eth-91 not found: ${local_patch}"
+            warn "mtk-999-eth-91 (Kconfig+Makefile) not found: ${local_patch}"
+        fi
+
+        # Stage soc hooks: include + rx processing, no PPE guards.
+        soc_patch="${mtk_patches}/mtk-999-eth-91-hnat-soc-hooks.patch"
+        if [ -f "$soc_patch" ]; then
+            cp -f "$soc_patch" "$owrt_patches/"
+            log "  staged mtk-999-eth-91 (soc hooks: include + rx)"
+        else
+            warn "mtk-999-eth-91 (soc hooks) not found: ${soc_patch}"
         fi
     else
         warn "Copy from logan_common failed"
