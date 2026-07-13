@@ -75,15 +75,19 @@ else
     exit 1
 fi
 
-log "Patching NPU Kbuild for CONFIG_MEDIATEK_NETSYS_V3..."
+log "Patching NPU Kbuild for CONFIG_MEDIATEK_NETSYS_V3 + include path..."
 # autobuild.sh registers feed with --subdir=feed, so actual path is SDK_ROOT/feed/
+# NPU is an external module; it needs NETSYS_V3 for struct/macro defs AND
+# -I$(srctree)/... to find mtk_hnat/nf_hnat_mtk.h via #include <...>
 npu_kbuild="${MTK_SDK_DIR}/feed/kernel/mtk_npu/src/Makefile"
 if [ -f "$npu_kbuild" ]; then
     if grep -q 'CONFIG_MEDIATEK_NETSYS_V3' "$npu_kbuild"; then
         log "  already patched"
     else
-        sed -i '/^ccflags-y += -I\$(src)\/protocol\/inc$/a ccflags-y += -DCONFIG_MEDIATEK_NETSYS_V3' "$npu_kbuild"
-        log "  added -DCONFIG_MEDIATEK_NETSYS_V3"
+        sed -i '/^ccflags-y += -I\$(src)\/protocol\/inc$/a\
+ccflags-y += -DCONFIG_MEDIATEK_NETSYS_V3\
+ccflags-y += -I$(srctree)/drivers/net/ethernet/mediatek' "$npu_kbuild"
+        log "  added -DCONFIG_MEDIATEK_NETSYS_V3 + include path"
     fi
 else
     warn "NPU Kbuild not found: ${npu_kbuild}"
