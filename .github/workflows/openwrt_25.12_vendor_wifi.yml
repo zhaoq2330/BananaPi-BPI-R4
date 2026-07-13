@@ -10,10 +10,8 @@ permissions:
 env:
   REPO_URL: https://git.openwrt.org/openwrt/openwrt.git
   REPO_BRANCH: openwrt-25.12
-  OPENWRT_COMMIT: 34ae6ba2d861e710e3c130c95cdb7eb4a1286121
   MTK_SDK_URL: https://github.com/mediatek/mtk-openwrt-feeds.git
   MTK_SDK_BRANCH: main
-  MTK_SDK_COMMIT: 9b5754e3a361635595ea31a14176b14169e69d18
   CONFIG_FILE: immortalwrt/MTK/defconfig-vendor-wifi
   UPLOAD_FIRMWARE: true
   TZ: Asia/Shanghai
@@ -53,25 +51,24 @@ jobs:
         sudo -E apt-get -qq clean ) &
         sudo timedatectl set-timezone "$TZ"
 
-    - name: Download firmware source code
+    - name: Download firmware source code (latest)
       run: |
-        git clone --branch $REPO_BRANCH $REPO_URL openwrt
+        git clone --depth=1 --branch $REPO_BRANCH $REPO_URL openwrt
         cd openwrt
-        git checkout $OPENWRT_COMMIT
+        git log --oneline -1
 
     - name: Restore toolchain cache
       uses: klever1988/cachewrtbuild@54ed4fe2f7d8b5cfbc0b928c159266ee892c2d3d
       with:
         ccache: 'false'
         prefix: ${{ github.workspace }}/openwrt
-        mixkey: ${{ env.OPENWRT_NAME }}-${{ env.OPENWRT_DEVICE }}-${{ env.REPO_BRANCH }}-${{ env.OPENWRT_COMMIT }}-${{ env.MTK_SDK_COMMIT }}
+        mixkey: ${{ env.OPENWRT_NAME }}-${{ env.OPENWRT_DEVICE }}-${{ env.REPO_BRANCH }}-${{ env.MTK_SDK_BRANCH }}-latest
 
-    - name: Clone MTK SDK
+    - name: Clone MTK SDK (latest)
       run: |
         MTK_SDK_DIR="${{ github.workspace }}/mtk-openwrt-feeds"
-        git clone --branch "${{ env.MTK_SDK_BRANCH }}" "${{ env.MTK_SDK_URL }}" "$MTK_SDK_DIR"
+        git clone --depth=1 --branch "${{ env.MTK_SDK_BRANCH }}" "${{ env.MTK_SDK_URL }}" "$MTK_SDK_DIR"
         cd "$MTK_SDK_DIR"
-        git checkout "$MTK_SDK_COMMIT"
         git log --oneline -1
         echo "MTK_SDK_DIR=$MTK_SDK_DIR" >> $GITHUB_ENV
 
@@ -123,5 +120,5 @@ jobs:
       uses: actions/upload-artifact@v7.0.1
       if: steps.organize.outcome == 'success' && !cancelled()
       with:
-        name: ${{ env.date1 }}_vendor_wifi_${{ env.OPENWRT_NAME }}_${{ env.OPENWRT_DEVICE }}_${{ env.REPO_BRANCH }}
+        name: ${{ env.date1 }}_vendor_wifi_${{ env.OPENWRT_NAME }}_${{ env.OPENWRT_DEVICE }}_latest
         path: ${{ env.FIRMWARE }}
