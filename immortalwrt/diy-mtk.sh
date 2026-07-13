@@ -67,35 +67,28 @@ if [ -d "$files_src" ]; then
         cp -af "$tmp_dst"/. "$files_dst/"
         log "  overlaid to: ${files_dst}"
 
-        # 999-eth-91 provides HNAT Kconfig, Makefile, and soc hooks.
-        # autobuild.sh does NOT apply logan_common patches-6.12.
-        #
-        # Split into two trimmed patches to avoid PPE guard hunk failures:
-        #   1) Kconfig + Makefile  (required for compilation)
-        #   2) include + rx hooks  (safe additive hunks, no PPE guards)
-        # The 5 PPE guard hunks (#if !defined wrappers) are excluded —
-        # they fail on linux-6.12.94 due to PPE function context changes.
+        # autobuild.sh skips logan_common patches-6.12.
+        # Stage trimmed 999-eth-91 in two parts (PPE guard hunks excluded —
+        # they fail on linux-6.12.94).
         script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
         mtk_patches="${script_dir}/../patches/filogic/mtk"
         owrt_patches="${OPENWRT_ROOT}/target/linux/mediatek/patches-6.12"
         mkdir -p "$owrt_patches"
 
-        # Stage trimmed 999-eth-91: Kconfig + Makefile only.
         local_patch="${mtk_patches}/mtk-999-eth-91-hnat-kconfig-makefile.patch"
         if [ -f "$local_patch" ]; then
             cp -f "$local_patch" "$owrt_patches/"
-            log "  staged mtk-999-eth-91 (Kconfig+Makefile)"
+            log "  staged Kconfig+Makefile"
         else
-            warn "mtk-999-eth-91 (Kconfig+Makefile) not found: ${local_patch}"
+            warn "not found: ${local_patch}"
         fi
 
-        # Stage soc hooks: include + rx processing, no PPE guards.
         soc_patch="${mtk_patches}/mtk-999-eth-91-hnat-soc-hooks.patch"
         if [ -f "$soc_patch" ]; then
             cp -f "$soc_patch" "$owrt_patches/"
-            log "  staged mtk-999-eth-91 (soc hooks: include + rx)"
+            log "  staged soc hooks (include+rx)"
         else
-            warn "mtk-999-eth-91 (soc hooks) not found: ${soc_patch}"
+            warn "not found: ${soc_patch}"
         fi
     else
         warn "Copy from logan_common failed"
