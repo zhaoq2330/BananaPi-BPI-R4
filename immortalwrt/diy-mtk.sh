@@ -7,6 +7,9 @@ warn() { echo "[MTK-FIX WARN] $*"; }
 OPENWRT_ROOT="${OPENWRT_ROOT:-$(pwd)}"
 MTK_SDK_DIR="${MTK_SDK_DIR:-${OPENWRT_ROOT}/../mtk-openwrt-feeds}"
 
+log "OPENWRT_ROOT=${OPENWRT_ROOT}"
+log "MTK_SDK_DIR=${MTK_SDK_DIR}"
+
 log "Pinning kernel Kconfig symbols..."
 cfg="${OPENWRT_ROOT}/target/linux/mediatek/filogic/config-6.12"
 if [ -f "$cfg" ]; then
@@ -16,7 +19,7 @@ if [ -f "$cfg" ]; then
         log "  ${symbol}: pinned to n"
     done
 else
-    warn "config-6.12 not found"
+    warn "config-6.12 not found: ${cfg}"
 fi
 
 log "Enabling CMake policy compatibility..."
@@ -24,19 +27,28 @@ export CMAKE_POLICY_VERSION_MINIMUM=3.5
 echo "CMAKE_POLICY_VERSION_MINIMUM=3.5" >> "${GITHUB_ENV:-/dev/null}" 2>/dev/null || true
 log "  CMAKE_POLICY_VERSION_MINIMUM=3.5"
 
-log "Overlaying HNAT/NPU kernel files..."
+log "Overlaying HNAT kernel files..."
 files_src="${MTK_SDK_DIR}/autobuild/unified/global/logan_common/25.12/files/target/linux/mediatek/files-6.12"
 files_dst="${OPENWRT_ROOT}/target/linux/mediatek/files-6.12"
+log "  source: ${files_src}"
 if [ -d "$files_src" ]; then
     mkdir -p "$files_dst"
     tmp_dst=$(mktemp -d)
+    log "  staging: ${tmp_dst}"
     trap "rm -rf '$tmp_dst'" EXIT
     if cp -af "$files_src"/. "$tmp_dst/" 2>/dev/null; then
+        before=$(find "$tmp_dst" -type f 2>/dev/null | wc -l)
+        log "  copied ${before} files to staging"
         find "$tmp_dst" -type f \( -name 'Makefile' -o -name 'Kbuild' -o -name 'Kconfig' \) -print0 2>/dev/null | \
             while IFS= read -r -d '' mf; do
                 case "$mf" in
-                    */drivers/net/ethernet/mediatek/mtk_hnat/Makefile) ;;
-                    *) rm -f "$mf" ;;
+                    */drivers/net/ethernet/mediatek/mtk_hnat/Makefile)
+                        log "    keep: $(echo "$mf" | sed "s|${tmp_dst}/||")"
+                        ;;
+                    *)
+                        log "    drop: $(echo "$mf" | sed "s|${tmp_dst}/||")"
+                        rm -f "$mf"
+                        ;;
                 esac
             done
         for dir in "$tmp_dst"/*/; do
@@ -46,40 +58,43 @@ if [ -d "$files_src" ]; then
                 *) rm -rf "$dir" ;;
             esac
         done
+        after=$(find "$tmp_dst" -type f 2>/dev/null | wc -l)
+        log "  after cleanup: ${after} files"
         cp -af "$tmp_dst"/. "$files_dst/"
-        log "  HNAT/NPU kernel files overlaid"
+        log "  overlaid to: ${files_dst}"
     else
         warn "Copy from logan_common failed"
     fi
     rm -rf "$tmp_dst"
     trap - EXIT
 else
-    warn "logan_common files-6.12 not found"
+    warn "logan_common files-6.12 not found: ${files_src}"
     exit 1
 fi
 
 log "Extracting mtk_eth_reset.h..."
 hdr="${files_dst}/drivers/net/ethernet/mediatek/mtk_eth_reset.h"
+log "  target: ${hdr}"
 
-# 策略1: 从 MTK SDK 原始 patch 提取
 patch_sdk="${MTK_SDK_DIR}/autobuild/unified/global/logan_common/25.12/files/target/linux/mediatek/patches-6.12"
 patch="${patch_sdk}/999-eth-93-mtk_eth_soc-add-internal-SER-notify-event.patch"
-
-# 策略2: autobuild 已将 patch 应用到 OpenWrt 树
 patch_owrt="${OPENWRT_ROOT}/target/linux/mediatek/patches-6.12/999-eth-93"*
 
 found=""
 if [ -f "$patch" ]; then
     found="$patch"
-    log "  Found in MTK SDK"
+    log "  strategy1: found in SDK (${patch})"
 elif [ -n "$(ls $patch_owrt 2>/dev/null)" ]; then
     found="$(ls $patch_owrt 2>/dev/null | head -1)"
-    log "  Found in OpenWrt tree: $(basename "$found")"
+    log "  strategy2: found in OpenWrt tree (${found})"
+else
+    log "  strategy1: not found (${patch})"
+    log "  strategy2: not found (${patch_owrt})"
 fi
 
 if [ -n "$found" ]; then
     mkdir -p "$(dirname "$hdr")"
-    sed -n '/^diff.*mtk_eth_reset\.h$/,/^diff --git /{/^+++/!s/^+//;/^diff --git /d;p}' "$found" | \
+    sed -n '/^diff.*mtk_eth_reset\.h$/{n; :a; /^diff --git /b; /^+++/!s/^+//; p; n; ba}' "$found" | \
         sed '1,/^@@/d' > "$hdr"
     if [ -s "$hdr" ] && grep -q 'MTK_FE_START_RESET' "$hdr"; then
         log "  Extracted ($(wc -l < "$hdr") lines)"
