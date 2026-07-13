@@ -64,6 +64,9 @@ if [ -d "$files_src" ]; then
         log "  overlaid to: ${files_dst}"
     else
         warn "Copy from logan_common failed"
+        rm -rf "$tmp_dst"
+        trap - EXIT
+        exit 1
     fi
     rm -rf "$tmp_dst"
     trap - EXIT
@@ -78,18 +81,20 @@ log "  target: ${hdr}"
 
 patch_sdk="${MTK_SDK_DIR}/autobuild/unified/global/logan_common/25.12/files/target/linux/mediatek/patches-6.12"
 patch="${patch_sdk}/999-eth-93-mtk_eth_soc-add-internal-SER-notify-event.patch"
-patch_owrt="${OPENWRT_ROOT}/target/linux/mediatek/patches-6.12/999-eth-93"*
+shopt -s nullglob
+patch_owrt_candidates=("${OPENWRT_ROOT}"/target/linux/mediatek/patches-6.12/999-eth-93*)
+shopt -u nullglob
 
 found=""
 if [ -f "$patch" ]; then
     found="$patch"
     log "  strategy1: found in SDK (${patch})"
-elif [ -n "$(ls $patch_owrt 2>/dev/null)" ]; then
-    found="$(ls $patch_owrt 2>/dev/null | head -1)"
+elif [ "${#patch_owrt_candidates[@]}" -gt 0 ]; then
+    found="${patch_owrt_candidates[0]}"
     log "  strategy2: found in OpenWrt tree (${found})"
 else
     log "  strategy1: not found (${patch})"
-    log "  strategy2: not found (${patch_owrt})"
+    log "  strategy2: no candidates in OpenWrt tree"
 fi
 
 if [ -n "$found" ]; then
