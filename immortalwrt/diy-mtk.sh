@@ -75,6 +75,19 @@ else
     exit 1
 fi
 
+log "Patching NPU Kbuild for CONFIG_MEDIATEK_NETSYS_V3..."
+npu_kbuild="${OPENWRT_ROOT}/feeds/mtk_openwrt_feed/kernel/mtk_npu/src/Makefile"
+if [ -f "$npu_kbuild" ]; then
+    if grep -q 'CONFIG_MEDIATEK_NETSYS_V3' "$npu_kbuild"; then
+        log "  already patched"
+    else
+        sed -i '/^ccflags-y += -I\$(src)\/protocol\/inc$/a ccflags-y += -DCONFIG_MEDIATEK_NETSYS_V3' "$npu_kbuild"
+        log "  added -DCONFIG_MEDIATEK_NETSYS_V3"
+    fi
+else
+    warn "NPU Kbuild not found: ${npu_kbuild}"
+fi
+
 log "Extracting mtk_eth_reset.h..."
 hdr="${files_dst}/drivers/net/ethernet/mediatek/mtk_eth_reset.h"
 log "  target: ${hdr}"
