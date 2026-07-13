@@ -13,10 +13,14 @@ log "MTK_SDK_DIR=${MTK_SDK_DIR}"
 log "Pinning kernel Kconfig symbols..."
 cfg="${OPENWRT_ROOT}/target/linux/mediatek/filogic/config-6.12"
 if [ -f "$cfg" ]; then
-    for symbol in MEDIATEK_2P5GE_PHY; do
+    for symbol in MEDIATEK_2P5GE_PHY NET_MEDIATEK_HNAT MEDIATEK_NETSYS_V3; do
+        case "$symbol" in
+            MEDIATEK_2P5GE_PHY) val="# CONFIG_${symbol} is not set" ;;
+            *) val="CONFIG_${symbol}=y" ;;
+        esac
         sed -i "/^CONFIG_${symbol}=/d; /^# CONFIG_${symbol} is not set$/d" "$cfg"
-        echo "# CONFIG_${symbol} is not set" >> "$cfg"
-        log "  ${symbol}: pinned to n"
+        echo "$val" >> "$cfg"
+        log "  ${symbol}: pinned"
     done
 else
     warn "config-6.12 not found: ${cfg}"
@@ -62,6 +66,20 @@ if [ -d "$files_src" ]; then
         log "  after cleanup: ${after} files"
         cp -af "$tmp_dst"/. "$files_dst/"
         log "  overlaid to: ${files_dst}"
+
+        # 999-eth-91 adds obj-$(CONFIG_NET_MEDIATEK_HNAT) += mtk_hnat/ to the
+        # kernel's drivers/net/ethernet/mediatek/Makefile, plus Kconfig entries
+        # and HNAT hooks in mtk_eth_soc.c. autobuild.sh does NOT apply
+        # logan_common patches-6.12, so we must stage this patch ourselves.
+        sdk_patch="${MTK_SDK_DIR}/autobuild/unified/global/logan_common/25.12/files/target/linux/mediatek/patches-6.12/999-eth-91-mtk_eth_soc-add-mtkhnat-driver-support.patch"
+        owrt_patches="${OPENWRT_ROOT}/target/linux/mediatek/patches-6.12"
+        mkdir -p "$owrt_patches"
+        if [ -f "$sdk_patch" ]; then
+            cp -f "$sdk_patch" "$owrt_patches/"
+            log "  staged 999-eth-91 to patches-6.12"
+        else
+            warn "999-eth-91 not found: ${sdk_patch}"
+        fi
     else
         warn "Copy from logan_common failed"
         rm -rf "$tmp_dst"
