@@ -68,17 +68,23 @@ if [ -d "$files_src" ]; then
         log "  overlaid to: ${files_dst}"
 
         # 999-eth-91 adds obj-$(CONFIG_NET_MEDIATEK_HNAT) += mtk_hnat/ to the
-        # kernel's drivers/net/ethernet/mediatek/Makefile, plus Kconfig entries
-        # and HNAT hooks in mtk_eth_soc.c. autobuild.sh does NOT apply
-        # logan_common patches-6.12, so we must stage this patch ourselves.
-        sdk_patch="${MTK_SDK_DIR}/autobuild/unified/global/logan_common/25.12/files/target/linux/mediatek/patches-6.12/999-eth-91-mtk_eth_soc-add-mtkhnat-driver-support.patch"
+        # kernel's drivers/net/ethernet/mediatek/Makefile, plus Kconfig entries.
+        # autobuild.sh does NOT apply logan_common patches-6.12.
+        #
+        # IMPORTANT: The full 999-eth-91 also modifies mtk_eth_soc.c with PPE
+        # guard hunks (#if !defined(CONFIG_NET_MEDIATEK_HNAT)) that fail on
+        # linux-6.12.94 due to PPE function context changes.  Quilt rejects the
+        # entire patch if any hunk fails → build breaks.  Use the trimmed
+        # version (Kconfig + Makefile only) from local mtk-patches/.
+        script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        local_patch="${script_dir}/../patches/filogic/mtk/mtk-999-eth-91-hnat-kconfig-makefile.patch"
         owrt_patches="${OPENWRT_ROOT}/target/linux/mediatek/patches-6.12"
         mkdir -p "$owrt_patches"
-        if [ -f "$sdk_patch" ]; then
-            cp -f "$sdk_patch" "$owrt_patches/"
-            log "  staged 999-eth-91 to patches-6.12"
+        if [ -f "$local_patch" ]; then
+            cp -f "$local_patch" "$owrt_patches/"
+            log "  staged trimmed 999-eth-91 (Kconfig+Makefile) to patches-6.12"
         else
-            warn "999-eth-91 not found: ${sdk_patch}"
+            warn "trimmed 999-eth-91 not found: ${local_patch}"
         fi
     else
         warn "Copy from logan_common failed"
