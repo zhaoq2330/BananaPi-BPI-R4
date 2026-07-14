@@ -103,6 +103,23 @@ else
     exit 1
 fi
 
+log "Injecting KERNEL_EXTRA_SYMBOLS for HNAT→NPU symvers..."
+# 0014 patch defines KernelPackage/mediatek_hnat but without symvers export.
+# NPU modules depend on HNAT symbols; without KERNEL_EXTRA_SYMBOLS:=1,
+# Module.symvers is not propagated → modpost undefined symbols.
+netdev_mk="${OPENWRT_ROOT}/package/kernel/linux/modules/netdevices.mk"
+if [ -f "$netdev_mk" ] && grep -q 'KernelPackage/mediatek_hnat' "$netdev_mk"; then
+    if ! grep -q 'KERNEL_EXTRA_SYMBOLS.*:=.*1' "$netdev_mk"; then
+        sed -i '/^define KernelPackage\/mediatek_hnat$/,/^endef$/{/DEPENDS:=/a\  KERNEL_EXTRA_SYMBOLS:=1
+}' "$netdev_mk"
+        log "  injected KERNEL_EXTRA_SYMBOLS:=1"
+    else
+        log "  already present"
+    fi
+else
+    warn "netdevices.mk not found or mediatek_hnat not defined"
+fi
+
 log "Patching NPU Makefile for CONFIG_MEDIATEK_NETSYS_V3..."
 # NPU package Makefile passes EXTRA_CFLAGS on cmdline → overrides Kbuild ccflags-y.
 # Must inject -DCONFIG_MEDIATEK_NETSYS_V3 into EXTRA_CFLAGS here, not in Kbuild.
